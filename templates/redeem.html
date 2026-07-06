@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Redeem Code — LVM Panel{% endblock %}
+{% block header %}Redeem a Code{% endblock %}
+{% block subheader %}Paste your redeem code below to instantly get a VPS{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:460px;">
+    <form method="post">
+        <div class="form-group">
+            <label>Redeem Code</label>
+            <input class="form-control" type="text" name="code" placeholder="XXXX-XXXX-XXXX" required style="text-transform:uppercase;">
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Redeem Now</button>
+    </form>
+</div>
+{% endblock %}
