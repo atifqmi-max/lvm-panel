@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ active_theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ panel_name }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body data-theme="{{ active_theme }}"
+      style="{% if bg_image_url %}background-image:url('{{ bg_image_url }}'); background-size:cover; background-position:center; background-attachment:fixed;{% endif %} --card-opacity:{{ card_opacity }}%;">
+{% if current_user.is_authenticated %}
+<div class="layout">
+    <aside class="sidebar">
+        <div class="brand"><span class="dot"></span> {{ panel_name }}</div>
+
+        <div class="nav-section-title">Menu</div>
+        <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">🖥️ My VPS</a>
+        <a class="nav-link {% if request.endpoint == 'redeem' %}active{% endif %}" href="{{ url_for('redeem') }}">🎟️ Redeem Code</a>
+
+        {% if current_user.is_admin %}
+        <div class="nav-section-title">Admin</div>
+        <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">📊 Admin Dashboard</a>
+        <a class="nav-link {% if request.endpoint == 'admin_create_vps' %}active{% endif %}" href="{{ url_for('admin_create_vps') }}">➕ Create VPS</a>
+        <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}" href="{{ url_for('admin_users') }}">👥 Manage Users</a>
+        <a class="nav-link {% if request.endpoint == 'admin_redeem' %}active{% endif %}" href="{{ url_for('admin_redeem') }}">🎁 Redeem Codes</a>
+        <a class="nav-link {% if request.endpoint == 'admin_settings' %}active{% endif %}" href="{{ url_for('admin_settings') }}">⚙️ Settings</a>
+        {% endif %}
+
+        <div class="sidebar-footer">
+            Logged in as <b>{{ current_user.username }}</b><br>
+            <a class="nav-link" style="justify-content:center; margin-top:8px;" href="{{ url_for('logout') }}">🚪 Logout</a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div>
+                <h1>{% block header %}Dashboard{% endblock %}</h1>
+                <div class="subtitle">{% block subheader %}{% endblock %}</div>
+            </div>
+            <form class="theme-switcher" action="{{ url_for('set_theme') }}" method="post">
+                <select name="theme" onchange="this.form.submit()">
+                    {% for t in themes %}
+                    <option value="{{ t }}" {% if t == active_theme %}selected{% endif %}>
+                        {{ t.replace('-', ' ').title() }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+</div>
+{% else %}
+    {% block guest_content %}{% endblock %}
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

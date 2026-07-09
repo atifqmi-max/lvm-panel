@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Console — {{ vps.vps_id }} — {{ panel_name }}{% endblock %}
+{% block header %}Console — {{ vps.name }}{% endblock %}
+{% block subheader %}Live terminal inside your VPS — no SSH client needed{% endblock %}
+
+{% block content %}
+<div class="btn-group" style="margin-bottom:14px;">
+    <a class="btn btn-outline btn-sm" href="{{ url_for('manage_vps', vps_id=vps.vps_id) }}">← Back to Manage</a>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('vps_files', vps_id=vps.vps_id) }}">📁 File Manager</a>
+</div>
+
+<div class="console-wrap">
+    <div id="terminal"></div>
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/css/xterm.min.css">
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/addon-fit/addon-fit.min.js"></script>
+<script>
+    const term = new Terminal({
+        cursorBlink: true,
+        theme: { background: '#000000', foreground: '#e7eaf2' },
+        fontSize: 14,
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${location.host}/ws/console/{{ vps.vps_id }}`);
+
+    ws.onopen = () => {
+        term.writeln('Connected. Starting shell...\r\n');
+        sendResize();
+    };
+    ws.onmessage = (event) => term.write(event.data);
+    ws.onclose = () => term.writeln('\r\n\r\n[Console disconnected]');
+    ws.onerror = () => term.writeln('\r\n[Connection error]');
+
+    term.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    });
+
+    function sendResize() {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(`__resize__:${term.rows}:${term.cols}`);
+        }
+    }
+
+    window.addEventListener('resize', () => { fitAddon.fit(); sendResize(); });
+</script>
+{% endblock %}

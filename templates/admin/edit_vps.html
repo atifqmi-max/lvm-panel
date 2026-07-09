@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ vps.vps_id }} — {{ panel_name }}{% endblock %}
+{% block header %}Edit VPS{% endblock %}
+{% block subheader %}{{ vps.vps_id }} — change resources, owner, or expiry{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:640px;">
+    <form method="post">
+        <div class="form-group">
+            <label>VPS Name</label>
+            <input class="form-control" type="text" name="name" value="{{ vps.name }}" required>
+        </div>
+
+        <div class="form-group">
+            <label>Owner</label>
+            <select class="form-control" name="owner_id" required>
+                {% for u in users %}
+                <option value="{{ u.id }}" {% if u.id == vps.owner_id %}selected{% endif %}>
+                    {{ u.username }}{% if u.is_admin %} (admin){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <small style="color:var(--text-dim);">Transfer this VPS to a different user by changing this.</small>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>RAM (GB)</label>
+                <input class="form-control" type="number" name="ram" min="1" value="{{ vps.ram }}" required>
+            </div>
+            <div class="form-group">
+                <label>CPU (vCores)</label>
+                <input class="form-control" type="number" name="cpu" min="1" value="{{ vps.cpu }}" required>
+            </div>
+            <div class="form-group">
+                <label>Disk (GB)</label>
+                <input class="form-control" type="number" name="disk" min="5" value="{{ vps.disk }}" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Extend by (days from now, leave blank to keep current expiry)</label>
+            <input class="form-control" type="number" name="days" min="0" placeholder="e.g. 30">
+        </div>
+
+        <small style="color:var(--text-dim); display:block; margin-bottom:14px;">
+            RAM/CPU changes apply live without needing a reinstall. Changing the OS image isn't supported here —
+            use Reinstall on the Manage page for that.
+        </small>
+
+        <button class="btn btn-primary btn-block" type="submit">Save Changes</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ panel_name }}{% endblock %}
+{% block header %}Panel Settings{% endblock %}
+{% block subheader %}Rename your panel and configure the public IP shown to members{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:520px;">
+    <form method="post">
+        <div class="form-group">
+            <label>Panel Name</label>
+            <input class="form-control" type="text" name="panel_name" value="{{ current_name }}" required>
+        </div>
+        <div class="form-group">
+            <label>Public Server IP (shown to members for SSH/Termius)</label>
+            <input class="form-control" type="text" name="public_ip" value="{{ current_ip }}" placeholder="e.g. 45.32.10.1 or panel.yourdomain.com">
+            <small style="color:var(--text-dim);">Leave this as your server's real public IP or domain. This is what every user sees as their "Host" in Termius.</small>
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="has_public_ip" {% if current_has_ip == 'yes' %}checked{% endif %}>
+                This server has a public IPv4 address
+            </label>
+            <small style="color:var(--text-dim); display:block; margin-top:4px;">
+                Uncheck this if your server is behind NAT / has no public IPv4 (e.g. home network, some low-cost hosts).
+                When unchecked, VPS pages will tell users to connect using the tmate session only, since direct Host:Port SSH won't be reachable from outside.
+            </small>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Save Settings</button>
+    </form>
+</div>
+
+<div class="card" style="max-width:520px; margin-top:18px;">
+    <h3 style="margin-top:0;">Appearance</h3>
+    <form method="post">
+        <input type="hidden" name="panel_name" value="{{ current_name }}">
+        <input type="hidden" name="public_ip" value="{{ current_ip }}">
+        <input type="hidden" name="has_public_ip" value="{{ 'on' if current_has_ip == 'yes' else '' }}">
+
+        <div class="form-group">
+            <label>Background Image URL</label>
+            <input class="form-control" type="text" name="bg_image_url" value="{{ current_bg }}" placeholder="https://example.com/wallpaper.jpg">
+            <small style="color:var(--text-dim);">Shown behind the whole panel for every user. Leave blank for no background image.</small>
+        </div>
+
+        <div class="form-group">
+            <label id="opacityLabel">Card Transparency ({{ current_opacity }}%)</label>
+            <input class="form-control" type="range" name="card_opacity" min="10" max="100" value="{{ current_opacity }}"
+                   oninput="document.getElementById('opacityLabel').innerText = 'Card Transparency (' + this.value + '%)'">
+            <small style="color:var(--text-dim);">Lower this so your background image shows through the cards/sidebar.</small>
+        </div>
+
+        <button class="btn btn-primary btn-block" type="submit">Save Appearance</button>
+    </form>
+</div>
+{% endblock %}

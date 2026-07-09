@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Files — {{ vps.vps_id }} — {{ panel_name }}{% endblock %}
+{% block header %}File Manager — {{ vps.name }}{% endblock %}
+{% block subheader %}Browse, upload, and download files inside your VPS{% endblock %}
+
+{% block content %}
+<div class="btn-group" style="margin-bottom:14px;">
+    <a class="btn btn-outline btn-sm" href="{{ url_for('manage_vps', vps_id=vps.vps_id) }}">← Back to Manage</a>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('vps_console', vps_id=vps.vps_id) }}">🖥️ Console</a>
+</div>
+
+<div class="card">
+    <div class="file-toolbar">
+        <input class="form-control file-path-input" id="pathInput" type="text" value="{{ path }}">
+        <button class="btn btn-outline btn-sm" onclick="loadPath(document.getElementById('pathInput').value)">Go</button>
+        <button class="btn btn-outline btn-sm" onclick="goUp()">⬆ Up</button>
+        <button class="btn btn-outline btn-sm" onclick="newFolder()">📁 New Folder</button>
+        <label class="btn btn-primary btn-sm" style="margin-bottom:0;">
+            ⬆ Upload <input type="file" id="uploadInput" style="display:none;" onchange="uploadFile()">
+        </label>
+    </div>
+    <ul class="file-list" id="fileList">
+        <li style="padding:20px; text-align:center; color:var(--text-dim);">Loading...</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const vpsId = "{{ vps.vps_id }}";
+let currentPath = "{{ path }}";
+
+function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + " KB";
+    if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + " MB";
+    return (bytes/1024/1024/1024).toFixed(1) + " GB";
+}
+
+function fmtDate(epoch) {
+    if (!epoch) return "";
+    const d = new Date(epoch * 1000);
+    return d.toLocaleString();
+}
+
+async function loadPath(path) {
+    currentPath = path || "/";
+    document.getElementById('pathInput').value = currentPath;
+    const list = document.getElementById('fileList');
+    list.innerHTML = '<li style="padding:20px; text-align:center; color:var(--text-dim);">Loading...</li>';
+
+    try {
+        const res = await fetch(`/vps/${vpsId}/files/list?path=${encodeURIComponent(currentPath)}`);
+        const data = await res.json();
+        if (!data.ok) {
+            list.innerHTML = `<li style="padding:20px; text-align:center; color:var(--danger);">${data.error}</li>`;
+            return;
+        }
+        if (data.entries.length === 0) {
+            list.innerHTML = '<li style="padding:20px; text-align:center; color:var(--text-dim);">Empty folder</li>';
+            return;
+        }
+        list.innerHTML = data.entries.map(e => `
+            <li class="file-row">
+                <span class="name ${e.is_dir ? 'is-dir' : ''}" onclick="${e.is_dir ? `loadPath('${joinPath(currentPath, e.name)}')` : ''}">
+                    ${e.is_dir ? '📁' : '📄'} ${e.name}
+                </span>
+                <span class="meta">
+                    ${e.is_dir ? '' : fmtSize(e.size)}
+                    <span>${fmtDate(e.mtime)}</span>
+                    ${!e.is_dir ? `<a class="btn btn-outline btn-sm" href="/vps/${vpsId}/files/download?path=${encodeURIComponent(joinPath(currentPath, e.name))}">⬇</a>` : ''}
+                    <button class="btn btn-danger btn-sm" onclick="deleteEntry('${joinPath(currentPath, e.name)}')">🗑</button>
+                </span>
+            </li>
+        `).join('');
+    } catch (e) {
+        list.innerHTML = `<li style="padding:20px; text-align:center; color:var(--danger);">Failed to load: ${e}</li>`;
+    }
+}
+
+function joinPath(base, name) {
+    if (base.endsWith('/')) return base + name;
+    return base + '/' + name;
+}
+
+function goUp() {
+    const parts = currentPath.split('/').filter(Boolean);
+    parts.pop();
+    loadPath('/' + parts.join('/'));
+}
+
+async function deleteEntry(path) {
+    if (!confirm(`Delete ${path}?`)) return;
+    const form = new FormData();
+    form.append('path', path);
+    await fetch(`/vps/${vpsId}/files/delete`, { method: 'POST', body: form });
+    loadPath(currentPath);
+}
+
+async function newFolder() {
+    const name = prompt("New folder name:");
+    if (!name) return;
+    const form = new FormData();
+    form.append('path', joinPath(currentPath, name));
+    await fetch(`/vps/${vpsId}/files/mkdir`, { method: 'POST', body: form });
+    loadPath(currentPath);
+}
+
+async function uploadFile() {
+    const input = document.getElementById('uploadInput');
+    if (!input.files.length) return;
+    const form = new FormData();
+    form.append('path', currentPath);
+    form.append('file', input.files[0]);
+    await fetch(`/vps/${vpsId}/files/upload`, { method: 'POST', body: form });
+    input.value = '';
+    loadPath(currentPath);
+}
+
+loadPath(currentPath);
+</script>
+{% endblock %}

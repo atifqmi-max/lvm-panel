@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — LVM Panel{% endblock %}
+{% block header %}Admin Dashboard{% endblock %}
+{% block subheader %}Overview of the entire panel{% endblock %}
+
+{% block content %}
+<div class="grid grid-3" style="margin-bottom:22px;">
+    <div class="card stat-card"><div class="label">Total Users</div><div class="value">{{ stats.total_users }}</div></div>
+    <div class="card stat-card"><div class="label">Total VPS</div><div class="value">{{ stats.total_vps }}</div></div>
+    <div class="card stat-card"><div class="label">Running VPS</div><div class="value">{{ stats.running_vps }}</div></div>
+</div>
+
+<div class="card">
+    <h3 style="margin-top:0;">All VPS Instances</h3>
+    <table>
+        <tr><th>VPS ID</th><th>Name</th><th>Owner</th><th>Specs</th><th>Status</th><th>Action</th></tr>
+        {% for vps in vps_list %}
+        <tr>
+            <td>{{ vps.vps_id }}</td>
+            <td>{{ vps.name }}</td>
+            <td>{{ vps.owner_username or ('#' ~ vps.owner_id) }}</td>
+            <td>{{ vps.ram }}GB / {{ vps.cpu }} vCore / {{ vps.disk }}GB</td>
+            <td><span class="status-pill status-{{ vps.status }}">{{ vps.status }}</span></td>
+            <td>
+                <div class="btn-group">
+                    <a class="btn btn-outline btn-sm" href="{{ url_for('manage_vps', vps_id=vps.vps_id) }}">Manage</a>
+                    <a class="btn btn-outline btn-sm" href="{{ url_for('admin_edit_vps', vps_id=vps.vps_id) }}">Edit</a>
+                    <form method="post" action="{{ url_for('admin_delete_vps', vps_id=vps.vps_id) }}" onsubmit="return confirm('Delete this VPS permanently?')">
+                        <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center; color:var(--text-dim);">No VPS created yet.</td></tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}
