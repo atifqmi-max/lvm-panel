@@ -1,0 +1,14 @@
+{
+  "users": [],
+  "nodes": [],
+  "vps": [],
+  "settings": {
+    "panel_name": "LVM Panel",
+    "theme": "cyber-dark",
+    "accent_color": "#3b82f6",
+    "allow_registration": true,
+    "default_node_id": null,
+    "port": 6000
+  },
+  "activities": []
+}
