@@ -8,7 +8,7 @@
     <a href="https://github.com/atifqmi-max/lvm-panel"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge" alt="Version"></a>
     <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node.js-20_LTS-green.svg?style=for-the-badge" alt="Node.js"></a>
     <a href="https://github.com/atifqmi-max/lvm-panel/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=for-the-badge" alt="License"></a>
-    <a href="http://localhost:6000"><img src="https://img.shields.io/badge/port-6000-cyan.svg?style=for-the-badge" alt="Default Port"></a>
+    <a href="http://localhost:3000"><img src="https://img.shields.io/badge/port-3000-cyan.svg?style=for-the-badge" alt="Default Port"></a>
   </p>
 </p>
 
@@ -31,7 +31,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/in
 ### 🛠️ Interactive Installation Steps:
 1. The installer will prompt you to enter your **Admin Email** and **Admin Password**.
 2. It automatically updates system packages and installs Node.js 20 LTS, Git, LXC tools, and network utilities.
-3. It seeds your administrator account, initializes the local node, and starts the panel as a systemd background service on port **6000**.
+3. It seeds your administrator account, initializes the local node, and starts the panel as a systemd background service on port **3000**.
 4. Once completed, the terminal will print your access details:
 
 ```text
@@ -39,16 +39,16 @@ bash <(curl -sSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/in
                   LVM Panel Installed Successfully!                   
 ======================================================================
 
-  Panel URL:        http://<YOUR_VPS_IP>:6000
+  Panel URL:        http://<YOUR_VPS_IP>:3000
   Admin Email:      admin@yourdomain.com
   Admin Password:   ••••••••••••
-  Panel Port:       6000
+  Panel Port:       3000
   Service Status:   systemctl status lvm-panel
 
 ======================================================================
 ```
 
-> **Note:** If you cannot access the panel URL, ensure port `6000` is opened in your cloud provider's firewall or security group (AWS Security Groups, DigitalOcean Cloud Firewall, Hetzner, Contabo, etc.).
+> **Note:** If you cannot access the panel URL, ensure port `3000` is opened in your cloud provider's firewall or security group (AWS Security Groups, DigitalOcean Cloud Firewall, Hetzner, Contabo, etc.).
 
 ---
 
@@ -99,7 +99,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/in
                             | (Tailwind, xterm, Chart) |
                             +------------+-------------+
                                          |
-                                         | Port 6000 (HTTP / WS)
+                                         | Port 3000 (HTTP / WS)
                                          v
                          +-------------------------------+
                          |      LVM Panel Master         |
@@ -125,7 +125,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/in
 4. Run the provided command on your remote Linux server:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/daemon/install-agent.sh | bash -s -- --panel-url http://YOUR_PANEL_IP:6000 --token YOUR_NODE_TOKEN
+curl -sSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/daemon/install-agent.sh | bash -s -- --panel-url http://YOUR_PANEL_IP:3000 --token YOUR_NODE_TOKEN
 ```
 
 The node will connect, send heartbeats, and display **ONLINE** in your cluster overview!
@@ -166,7 +166,7 @@ node src/database/seed.js admin@domain.com MySecretPassword admin
 npm start
 ```
 
-Visit `http://localhost:6000` in your web browser.
+Visit `http://localhost:3000` in your web browser.
 
 ---
 
