@@ -28,24 +28,34 @@ async function seed(adminEmail, adminPassword, adminUsername = 'admin') {
   }
 
   // 2. Check or create Local Node
+  const { getPublicIp } = require('../utils/helpers');
+  const serverIp = await getPublicIp();
+
   let localNode = db.findOne('nodes', n => n.is_local === true);
   if (!localNode) {
     localNode = db.insert('nodes', {
       name: 'Local Node (Primary)',
-      location: 'Local Datacenter',
-      fqdn_or_ip: '127.0.0.1',
-      port: 6000,
+      location: 'Primary Datacenter',
+      fqdn_or_ip: serverIp,
+      port: 3000,
       token: 'local_node_internal_token_' + Math.random().toString(36).substring(2, 12),
       status: 'online',
-      ram_total: 16384, // 16 GB MB
+      ram_total: 16384, // 16 GB
       cpu_cores: 8,
       disk_total: 500, // 500 GB
       is_local: true,
       last_ping: new Date().toISOString()
     });
-    console.log(`[Seed] Created default Local Node: ${localNode.name}`);
+    console.log(`[Seed] Created default Local Node: ${localNode.name} (${serverIp})`);
   } else {
-    console.log(`[Seed] Local Node already exists: ${localNode.name}`);
+    // If localNode was set to 127.0.0.1, auto-upgrade to real server IP
+    if (localNode.fqdn_or_ip === '127.0.0.1' && serverIp !== '127.0.0.1') {
+      db.updateById('nodes', localNode.id, { fqdn_or_ip: serverIp });
+      localNode.fqdn_or_ip = serverIp;
+      console.log(`[Seed] Updated Local Node IP to real public IP: ${serverIp}`);
+    } else {
+      console.log(`[Seed] Local Node already active: ${localNode.name} (${localNode.fqdn_or_ip})`);
+    }
   }
 
   // Set default node in settings
