@@ -7,7 +7,7 @@ const path = require('path');
 
 // CLI or Environment configuration
 const args = process.argv.slice(2);
-let panelUrl = process.env.PANEL_URL || 'http://127.0.0.1:6000';
+let panelUrl = process.env.PANEL_URL || 'http://127.0.0.1:3000';
 let token = process.env.NODE_TOKEN || '';
 
 for (let i = 0; i < args.length; i++) {
