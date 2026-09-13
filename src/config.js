@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 module.exports = {
-  PORT: parseInt(process.env.PORT || '6000', 10),
+  PORT: parseInt(process.env.PORT || '3000', 10),
   HOST: process.env.HOST || '0.0.0.0',
   JWT_SECRET: process.env.JWT_SECRET || 'lvm_panel_super_secret_key_production_2026',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
