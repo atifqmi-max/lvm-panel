@@ -301,68 +301,68 @@ function renderDashboardCards(vpsList) {
     const isRunning = vps.status === 'running';
     const isSuspended = vps.status === 'suspended';
     
-    let statusBadgeClass = 'bg-slate-800 text-slate-400 border-slate-700';
-    let statusDotClass = 'pulse-stopped';
+    let statusDot = 'stopped';
     let statusText = 'STOPPED';
+    let statusClass = 'text-slate-400 bg-slate-800';
 
     if (isRunning) {
-      statusBadgeClass = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-      statusDotClass = 'pulse-running';
+      statusDot = 'online';
       statusText = 'RUNNING';
+      statusClass = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
     } else if (isSuspended) {
-      statusBadgeClass = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      statusDotClass = 'pulse-suspended';
+      statusDot = 'suspended';
       statusText = 'SUSPENDED';
+      statusClass = 'text-amber-400 bg-amber-500/10 border border-amber-500/20';
     }
 
     return `
-      <div class="glass-card p-5 border border-white/5 flex flex-col justify-between">
+      <div class="dev-card p-4 flex flex-col justify-between">
         <div>
           <div class="flex items-start justify-between gap-2 mb-3">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <i data-lucide="server" class="w-5 h-5"></i>
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+                <i data-lucide="server" class="w-4 h-4"></i>
               </div>
               <div>
-                <h4 class="font-bold text-white text-base leading-tight">${vps.hostname}</h4>
-                <span class="text-xs text-slate-400 font-mono">${vps.os}</span>
+                <h4 class="font-bold text-white text-sm font-mono leading-tight">${vps.hostname}</h4>
+                <span class="text-[11px] text-slate-400 font-mono">${vps.os}</span>
               </div>
             </div>
-            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${statusBadgeClass}">
-              <span class="pulse-indicator ${statusDotClass}"></span>
+            <span class="tech-pill flex items-center gap-1.5 ${statusClass}">
+              <span class="pulse-dot ${statusDot}"></span>
               <span>${statusText}</span>
             </span>
           </div>
 
           <!-- Specs -->
-          <div class="grid grid-cols-3 gap-2 my-4 text-center">
-            <div class="bg-slate-900/60 p-2 rounded-lg border border-white/5">
-              <div class="text-[9px] uppercase font-bold text-slate-400">CPU</div>
-              <div class="text-xs font-bold text-white">${vps.cpu_cores} vCPU</div>
+          <div class="grid grid-cols-3 gap-2 my-3 text-center font-mono">
+            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800/80">
+              <div class="text-[9px] uppercase text-slate-500 font-bold">vCPU</div>
+              <div class="text-xs font-bold text-white">${vps.cpu_cores} Cores</div>
             </div>
-            <div class="bg-slate-900/60 p-2 rounded-lg border border-white/5">
-              <div class="text-[9px] uppercase font-bold text-slate-400">RAM</div>
+            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800/80">
+              <div class="text-[9px] uppercase text-slate-500 font-bold">RAM</div>
               <div class="text-xs font-bold text-white">${vps.ram_mb} MB</div>
             </div>
-            <div class="bg-slate-900/60 p-2 rounded-lg border border-white/5">
-              <div class="text-[9px] uppercase font-bold text-slate-400">Disk</div>
+            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800/80">
+              <div class="text-[9px] uppercase text-slate-500 font-bold">Disk</div>
               <div class="text-xs font-bold text-white">${vps.disk_gb} GB</div>
             </div>
           </div>
 
-          <!-- Connection Badges -->
-          <div class="bg-slate-950/60 p-2.5 rounded-xl border border-white/5 flex items-center justify-between text-xs font-mono text-slate-300 mb-4">
+          <!-- Connection IP & Port -->
+          <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 font-mono text-xs flex items-center justify-between text-slate-300 mb-3">
             <div class="flex items-center gap-1.5 truncate">
-              <i data-lucide="globe" class="w-3.5 h-3.5 text-cyan-400"></i>
-              <span class="truncate">${vps.connection_ip}</span>
+              <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-400"></i>
+              <span class="truncate font-bold">${vps.connection_ip}</span>
             </div>
             <span class="text-cyan-400 font-bold">Port ${vps.connection_port}</span>
           </div>
         </div>
 
-        <button onclick="navigateTo('vps-manager', '${vps.id}')" class="w-full py-2.5 px-4 rounded-xl bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 text-xs font-bold transition-all flex items-center justify-center gap-2">
-          <span>Manage VPS</span>
-          <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+        <button onclick="navigateTo('vps-manager', '${vps.id}')" class="w-full py-2 px-3 rounded-lg bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/20 text-xs font-semibold transition-all flex items-center justify-center gap-1.5">
+          <span>Manage Instance</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
         </button>
       </div>
     `;
@@ -404,20 +404,23 @@ async function loadVpsManagerData(vpsId) {
     const isSuspended = currentVps.status === 'suspended';
 
     if (isRunning) {
-      statusBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5';
-      statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>RUNNING</span>';
+      statusBadge.className = 'tech-pill bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1.5';
+      statusBadge.innerHTML = '<span class="pulse-dot online"></span><span>RUNNING</span>';
     } else if (isSuspended) {
-      statusBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5';
-      statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span><span>SUSPENDED</span>';
+      statusBadge.className = 'tech-pill bg-amber-500/10 text-amber-400 border-amber-500/20 flex items-center gap-1.5';
+      statusBadge.innerHTML = '<span class="pulse-dot suspended"></span><span>SUSPENDED</span>';
     } else {
-      statusBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5';
-      statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span><span>STOPPED</span>';
+      statusBadge.className = 'tech-pill bg-slate-800 text-slate-400 border-slate-700 flex items-center gap-1.5';
+      statusBadge.innerHTML = '<span class="pulse-dot stopped"></span><span>STOPPED</span>';
     }
 
     // Specs
-    document.getElementById('mgr-spec-cpu').innerText = `${currentVps.cpu_cores} Cores`;
-    document.getElementById('mgr-spec-ram').innerText = `${currentVps.ram_mb} MB`;
-    document.getElementById('mgr-spec-disk').innerText = `${currentVps.disk_gb} GB`;
+    const cpuEl = document.getElementById('mgr-spec-cpu');
+    const ramEl = document.getElementById('mgr-spec-ram');
+    const diskEl = document.getElementById('mgr-spec-disk');
+    if (cpuEl) cpuEl.innerText = `${currentVps.cpu_cores} Cores`;
+    if (ramEl) ramEl.innerText = `${currentVps.ram_mb} MB`;
+    if (diskEl) diskEl.innerText = `${currentVps.disk_gb} GB`;
 
     // Credentials Card
     document.getElementById('cred-ip').innerText = currentVps.connection_ip;
@@ -432,13 +435,13 @@ async function loadVpsManagerData(vpsId) {
     const adminDedBtn = document.getElementById('admin-dedicated-ip-container');
 
     if (currentVps.dedicated_ip) {
-      dedVal.innerHTML = `<span class="text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20">${currentVps.dedicated_ip}</span>`;
+      dedVal.innerHTML = `<span class="tech-pill text-purple-400 bg-purple-500/10 border-purple-500/20 font-bold">${currentVps.dedicated_ip}</span>`;
       dedPill.innerText = 'Dedicated Public IP';
-      dedPill.className = 'badge-tech bg-purple-500/20 text-purple-400 border-purple-500/30';
+      dedPill.className = 'tech-pill bg-purple-500/20 text-purple-400 border-purple-500/30';
     } else {
-      dedVal.innerHTML = `<span class="text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20 text-sm">Not Set</span>`;
-      dedPill.innerText = 'Standard NAT';
-      dedPill.className = 'badge-tech';
+      dedVal.innerHTML = `<span class="tech-pill text-amber-400/90 bg-amber-500/10 border-amber-500/20 text-xs">Not Set</span>`;
+      dedPill.innerText = 'NAT Shared';
+      dedPill.className = 'tech-pill';
     }
 
     // Dedicated IP Admin-Only configuration button
