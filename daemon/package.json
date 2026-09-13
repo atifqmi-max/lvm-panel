@@ -1,0 +1,12 @@
+{
+  "name": "lvm-agent",
+  "version": "1.0.0",
+  "description": "LVM Panel Remote Node Agent Daemon",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "ws": "^8.17.0"
+  }
+}

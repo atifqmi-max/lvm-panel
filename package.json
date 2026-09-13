@@ -1,0 +1,33 @@
+{
+  "name": "lvm-panel",
+  "version": "1.0.0",
+  "description": "LVM Panel - Next-Gen Linux Virtual Machine & Container Management Cloud Panel",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/database/seed.js",
+    "init-db": "node src/database/seed.js"
+  },
+  "keywords": [
+    "vps",
+    "vps-manager",
+    "lxc",
+    "cloud-panel",
+    "linux",
+    "hosting",
+    "lvm-panel"
+  ],
+  "author": "Atif Lashari",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {}
+}
