@@ -13,17 +13,20 @@ class VpsController {
         vpsList = db.find('vps', v => v.user_id === user.id);
       }
 
+      const hostIp = req.headers.host ? req.headers.host.split(':')[0] : '127.0.0.1';
+
       // Enrich with node details and user details if admin
       const enriched = vpsList.map(vps => {
         const node = db.findById('nodes', vps.node_id);
         const owner = db.findById('users', vps.user_id);
-        const connectionIp = vps.dedicated_ip || (node ? node.fqdn_or_ip : '127.0.0.1');
+        const resolvedNodeIp = (node && node.fqdn_or_ip && node.fqdn_or_ip !== '127.0.0.1') ? node.fqdn_or_ip : hostIp;
+        const connectionIp = vps.dedicated_ip || resolvedNodeIp;
         const connectionPort = vps.dedicated_ip ? 22 : vps.ssh_port;
 
         return {
           ...vps,
-          node_name: node ? node.name : 'Unknown Node',
-          node_ip: node ? node.fqdn_or_ip : '127.0.0.1',
+          node_name: node ? node.name : 'Primary Node',
+          node_ip: resolvedNodeIp,
           node_location: node ? node.location : 'Global',
           owner_name: owner ? owner.username : 'Unknown',
           owner_email: owner ? owner.email : 'Unknown',
@@ -56,9 +59,11 @@ class VpsController {
         return res.status(403).json({ success: false, message: 'Permission denied.' });
       }
 
+      const hostIp = req.headers.host ? req.headers.host.split(':')[0] : '127.0.0.1';
       const node = db.findById('nodes', vps.node_id);
       const owner = db.findById('users', vps.user_id);
-      const connectionIp = vps.dedicated_ip || (node ? node.fqdn_or_ip : '127.0.0.1');
+      const resolvedNodeIp = (node && node.fqdn_or_ip && node.fqdn_or_ip !== '127.0.0.1') ? node.fqdn_or_ip : hostIp;
+      const connectionIp = vps.dedicated_ip || resolvedNodeIp;
       const connectionPort = vps.dedicated_ip ? 22 : vps.ssh_port;
 
       return res.json({
@@ -66,7 +71,7 @@ class VpsController {
         data: {
           ...vps,
           node_name: node ? node.name : 'Primary Node',
-          node_ip: node ? node.fqdn_or_ip : '127.0.0.1',
+          node_ip: resolvedNodeIp,
           node_location: node ? node.location : 'Global',
           owner_name: owner ? owner.username : 'Unknown',
           owner_email: owner ? owner.email : 'Unknown',
