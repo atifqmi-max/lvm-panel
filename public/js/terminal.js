@@ -15,22 +15,21 @@ class TerminalManager {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // Clean previous
     container.innerHTML = '';
 
     if (window.Terminal) {
       this.term = new window.Terminal({
         cursorBlink: true,
-        fontFamily: 'JetBrains Mono, Menlo, Courier New, monospace',
-        fontSize: 14,
-        lineHeight: 1.2,
+        fontFamily: 'JetBrains Mono, Menlo, monospace',
+        fontSize: 13,
+        lineHeight: 1.25,
         theme: {
-          background: '#0b0f19',
+          background: '#070a10',
           foreground: '#f8fafc',
-          cursor: '#06b6d4',
-          selectionBackground: 'rgba(6, 182, 212, 0.3)',
+          cursor: '#38bdf8',
+          selectionBackground: 'rgba(56, 189, 248, 0.3)',
           black: '#1e293b',
-          red: '#f43f5e',
+          red: '#ef4444',
           green: '#10b981',
           yellow: '#f59e0b',
           blue: '#3b82f6',
@@ -47,7 +46,7 @@ class TerminalManager {
 
       this.term.open(container);
       if (this.fitAddon) {
-        setTimeout(() => this.fitAddon.fit(), 50);
+        setTimeout(() => this.fitAddon.fit(), 60);
       }
 
       // Handle user keyboard input
@@ -73,7 +72,7 @@ class TerminalManager {
     }
 
     this.term.clear();
-    this.term.write('\x1b[36m[LVM Terminal]\x1b[0m Initializing secure WebSocket console channel...\r\n');
+    this.term.write('\x1b[36m[LVM Terminal]\x1b[0m Establishing WebSocket console session...\r\n');
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/terminal?vps_id=${vpsId}&token=${api.getToken()}`;
@@ -106,13 +105,13 @@ class TerminalManager {
         this.term.write('\r\n\x1b[33m[LVM Terminal] Session disconnected.\x1b[0m\r\n');
       };
 
-      this.socket.onerror = (err) => {
+      this.socket.onerror = () => {
         this.isConnected = false;
         this.updateStatusUI(false);
         this.term.write('\r\n\x1b[31m[LVM Terminal] WebSocket connection error.\x1b[0m\r\n');
       };
     } catch (err) {
-      this.term.write(`\r\n\x1b[31mFailed to establish socket: ${err.message}\x1b[0m\r\n`);
+      this.term.write(`\r\n\x1b[31mFailed to connect: ${err.message}\x1b[0m\r\n`);
     }
   }
 
@@ -130,17 +129,17 @@ class TerminalManager {
     const connectBtn = document.getElementById('terminal-connect-btn');
     if (badge) {
       if (connected) {
-        badge.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5';
-        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Connected';
+        badge.className = 'tech-pill text-emerald-400 bg-emerald-500/10 border-emerald-500/20 flex items-center gap-1.5';
+        badge.innerHTML = '<span class="pulse-dot online"></span> Connected';
       } else {
-        badge.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5';
-        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span> Disconnected';
+        badge.className = 'tech-pill text-slate-400';
+        badge.innerHTML = 'Disconnected';
       }
     }
     if (connectBtn) {
       connectBtn.innerHTML = connected 
-        ? '<i data-lucide="power-off" class="w-4 h-4"></i> Disconnect' 
-        : '<i data-lucide="play" class="w-4 h-4"></i> Connect Console';
+        ? '<i data-lucide="square" class="w-3 h-3"></i><span>Disconnect</span>' 
+        : '<i data-lucide="play" class="w-3 h-3"></i><span>Connect</span>';
       if (window.lucide) window.lucide.createIcons();
     }
   }
