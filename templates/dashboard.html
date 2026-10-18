@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Home</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Dashboard</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Welcome Section -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <div style="flex: 1;">
+            <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Welcome back, {{ current_user.username }}! 👋</h2>
+            <p style="color: var(--text-muted);">Manage your virtual private servers from one central dashboard.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('vps_list') }}" class="btn btn-primary">
+                <i class="fas fa-server"></i>
+                <span>Manage Server</span>
+            </a>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin_vps_create') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i>
+                <span>New Server</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="grid grid-4" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-server"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Server</div>
+            <div class="stat-value">{{ vps_count }}</div>
+            <div class="stat-change">
+                <span class="badge badge-info">{{ running_count }} running</span>
+                <span class="badge badge-warning">{{ suspended_count }} suspended</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-microchip"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total CPU Cores</div>
+            <div class="stat-value">{{ total_cpu }}</div>
+            <div class="stat-change">Across all Server</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-memory"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total RAM</div>
+            <div class="stat-value">{{ total_ram }} GB</div>
+            <div class="stat-change">Across all Server</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-hdd"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Storage</div>
+            <div class="stat-value">{{ total_disk }} GB</div>
+            <div class="stat-change">Across all Server</div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions for Mobile -->
+<div class="card" style="margin-bottom: 2rem; display: none;" id="quickActionsMobile">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-bolt"></i>
+            Quick Actions
+        </h3>
+    </div>
+    <div class="grid grid-2" style="gap: 1rem;">
+        <a href="{{ url_for('vps_list') }}" class="btn btn-outline btn-block">
+            <i class="fas fa-server"></i> My Server
+        </a>
+        <a href="{{ url_for('ports_list') }}" class="btn btn-outline btn-block">
+            <i class="fas fa-plug"></i> Ports
+        </a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline btn-block">
+            <i class="fas fa-crown"></i> Admin
+        </a>
+        <a href="{{ url_for('admin_vps_create') }}" class="btn btn-primary btn-block">
+            <i class="fas fa-plus"></i> New Server
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid grid-2" style="margin-bottom: 2rem;">
+    <!-- Server Status Chart -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-chart-pie"></i>
+                Server Status Overview
+            </h3>
+        </div>
+        <div style="height: 250px; position: relative;">
+            <canvas id="statusChart"></canvas>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; flex-wrap: wrap;">
+            <div><span class="status-dot running" style="display: inline-block; margin-right: 0.5rem;"></span> Running: {{ running_count }}</div>
+            <div><span class="status-dot stopped" style="display: inline-block; margin-right: 0.5rem;"></span> Stopped: {{ stopped_count }}</div>
+            <div><span class="status-dot suspended" style="display: inline-block; margin-right: 0.5rem;"></span> Suspended: {{ suspended_count }}</div>
+        </div>
+    </div>
+
+    <!-- Resource Usage -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-chart-line"></i>
+                Resource Usage
+            </h3>
+        </div>
+        <div style="height: 250px; position: relative;">
+            <canvas id="resourceChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- My Server List -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-server"></i>
+            My Virtual Private Servers
+        </h3>
+        <a href="{{ url_for('vps_list') }}" class="btn btn-sm btn-outline">
+            <span>View All</span>
+            <i class="fas fa-arrow-right"></i>
+        </a>
+    </div>
+
+    {% if vps_list %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Resources</th>
+                    <th>IP Address</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vps in vps_list[:5] %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="user-avatar" style="width: 32px; height: 32px; background-color: var(--accent-primary);">
+                                <i class="fas fa-server" style="font-size: 1rem;"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight: 600;">{{ vps.hostname or vps.container_name }}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">ID: {{ vps.id }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="status-indicator">
+                            <span class="status-dot {% if vps.suspended %}suspended{% elif vps.live_status == 'running' %}running{% else %}stopped{% endif %}"></span>
+                            <span class="status-text">
+                                {% if vps.suspended %}Suspended{% elif vps.live_status == 'running' %}Running{% else %}Stopped{% endif %}
+                            </span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-size: 0.875rem;">
+                            <div><i class="fas fa-microchip" style="width: 16px; color: var(--text-muted);"></i> {{ vps.cpu }} Cores</div>
+                            <div><i class="fas fa-memory" style="width: 16px; color: var(--text-muted);"></i> {{ vps.ram }}</div>
+                            <div><i class="fas fa-hdd" style="width: 16px; color: var(--text-muted);"></i> {{ vps.storage }}</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-family: monospace;">
+                            {% if vps.ip_alias %}
+                            {{ vps.ip_alias }}
+                            <div style="font-size: 0.7rem; color: var(--text-muted);">(alias)</div>
+                            {% elif vps.ip_address %}
+                            {{ vps.ip_address }}
+                            {% else %}
+                            <span class="text-muted">Not assigned</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <a href="{{ url_for('vps_detail', vps_id=vps.id) }}" class="btn btn-sm btn-outline" data-tooltip="Manage">
+                                <i class="fas fa-cog"></i>
+                            </a>
+                            {% if vps.live_status == 'running' and not vps.suspended %}
+                            <a href="{{ url_for('vps_console', vps_id=vps.id) }}" class="btn btn-sm btn-outline" data-tooltip="Console">
+                                <i class="fas fa-terminal"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-server"></i>
+        <h3>No Server Yet</h3>
+        <p>You haven't created any virtual private servers yet.</p>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('admin_vps_create') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create Your First Server
+        </a>
+        {% else %}
+        <p class="text-muted">Contact an administrator to create a Server for you.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Recent Notifications -->
+{% if notifications %}
+<div class="card" style="margin-top: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-bell"></i>
+            Recent Notifications
+        </h3>
+        <a href="{{ url_for('notifications') }}" class="btn btn-sm btn-outline">View All</a>
+    </div>
+    <div class="notifications-list">
+        {% for notif in notifications %}
+        <div class="notification-item" onclick="window.location.href='{{ url_for('notifications') }}'">
+            <div class="notification-icon {{ notif.type }}">
+                <i class="fas fa-{% if notif.type == 'success' %}check-circle{% elif notif.type == 'warning' %}exclamation-triangle{% elif notif.type == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+            </div>
+            <div class="notification-content">
+                <div class="notification-title">{{ notif.title }}</div>
+                <div class="notification-message">{{ notif.message }}</div>
+                <div class="notification-time">{{ notif.created_at|relative_time }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Node Status (for admins) -->
+{% if current_user.is_admin and node_status %}
+<div class="card" style="margin-top: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-network-wired"></i>
+            Node Status
+        </h3>
+    </div>
+    <div class="grid grid-3">
+        {% for node in node_status %}
+        <div class="stat-card" style="padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div class="stat-icon {% if node.online %}success{% else %}danger{% endif %}" style="width: 40px; height: 40px;">
+                    <i class="fas fa-{% if node.online %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600;">{{ node.name }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ node.location }}</div>
+                    <div style="margin-top: 0.5rem;">
+                        <span class="badge badge-info">{{ node.vps_count }}/{{ node.total_vps }} Server</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show quick actions on mobile
+        if (window.innerWidth <= 768) {
+            document.getElementById('quickActionsMobile').style.display = 'block';
+        }
+
+        // Status Chart
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Running', 'Stopped', 'Suspended'],
+                datasets: [{
+                    data: [{{ running_count }}, {{ stopped_count }}, {{ suspended_count }}],
+                    backgroundColor: ['#10b981', '#6c757d', '#f59e0b'],
+                    borderColor: 'transparent',
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Resource Chart
+        const resourceCtx = document.getElementById('resourceChart').getContext('2d');
+        new Chart(resourceCtx, {
+            type: 'bar',
+            data: {
+                labels: ['CPU', 'RAM', 'Storage'],
+                datasets: [{
+                    label: 'Total Allocated',
+                    data: [{{ total_cpu }}, {{ total_ram }}, {{ total_disk }}],
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#2a2e34'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value + (this.chart.data.labels[0] === 'CPU' ? ' cores' : ' GB');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

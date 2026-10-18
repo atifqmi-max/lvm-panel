@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}User: {{ user.username }} - {{ panel_name }}{% endblock %}
+
+{% block header_title %}User Details{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_users') }}" class="breadcrumb-item">Users</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">{{ user.username }}</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- User Header -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="user-avatar" style="width: 64px; height: 64px; font-size: 1.5rem;">
+                {% if user.profile_picture %}
+                <img src="{{ user.profile_picture }}" alt="{{ user.username }}">
+                {% else %}
+                <span>{{ user.username[:1].upper() }}</span>
+                {% endif %}
+            </div>
+            <div>
+                <h2 style="font-size: 1.5rem; margin-bottom: 0.25rem;">{{ user.username }}</h2>
+                <div style="color: var(--text-muted);">{{ user.email }}</div>
+                <div style="margin-top: 0.5rem;">
+                    {% if user.is_main_admin %}
+                    <span class="badge badge-danger">Main Admin</span>
+                    {% elif user.is_admin %}
+                    <span class="badge badge-warning">Admin</span>
+                    {% else %}
+                    <span class="badge badge-success">User</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-left: auto; display: flex; gap: 0.75rem;">
+            <button class="btn btn-outline" onclick="editUser()">
+                <i class="fas fa-edit"></i> Edit User
+            </button>
+            {% if not user.is_main_admin %}
+            <button class="btn btn-danger" onclick="deleteUser()">
+                <i class="fas fa-trash"></i> Delete User
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- User Stats -->
+<div class="grid grid-4" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-server"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Server</div>
+            <div class="stat-value">{{ vps_list|length }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-play"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Running</div>
+            <div class="stat-value">{{ vps_list|selectattr('status', 'equalto', 'running')|list|length }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-ban"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Suspended</div>
+            <div class="stat-value">{{ vps_list|selectattr('suspended', 'equalto', 1)|list|length }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-plug"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Port Usage</div>
+            <div class="stat-value">{{ used_ports }}/{{ allocated_ports }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- User's Server -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-server"></i>
+            User's Virtual Private Servers
+        </h3>
+        <a href="{{ url_for('admin_vps_create') }}?user_id={{ user.id }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Create Server for User
+        </a>
+    </div>
+
+    {% if vps_list %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Resources</th>
+                    <th>IP Address</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vps in vps_list %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="user-avatar" style="width: 24px; height: 24px; background-color: var(--accent-primary);">
+                                <i class="fas fa-server" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <span>{{ vps.hostname or vps.container_name }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="status-indicator">
+                            <span class="status-dot {% if vps.suspended %}suspended{% elif vps.status == 'running' %}running{% else %}stopped{% endif %}"></span>
+                            <span>{% if vps.suspended %}Suspended{% else %}{{ vps.status|title }}{% endif %}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ vps.cpu }} CPU</span>
+                        <span class="badge badge-info">{{ vps.ram }}</span>
+                        <span class="badge badge-info">{{ vps.storage }}</span>
+                    </td>
+                    <td>
+                        {% if vps.ip_alias %}
+                        {{ vps.ip_alias }}
+                        {% elif vps.ip_address %}
+                        {{ vps.ip_address }}
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ vps.created_at|relative_time }}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="{{ url_for('vps_detail', vps_id=vps.id) }}" class="btn btn-sm btn-outline" data-tooltip="Manage">
+                                <i class="fas fa-cog"></i>
+                            </a>
+                            <a href="{{ url_for('admin_vps_edit', vps_id=vps.id) }}" class="btn btn-sm btn-outline" data-tooltip="Edit">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-server"></i>
+        <p>This user has no Server instances.</p>
+        <a href="{{ url_for('admin_vps_create') }}?user_id={{ user.id }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create First Server
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Port Forwards -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-plug"></i>
+            Port Forwards
+        </h3>
+    </div>
+
+    {% if forwards %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Server Port</th>
+                    <th>Host Port</th>
+                    <th>Protocol</th>
+                    <th>Hits</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for forward in forwards %}
+                <tr>
+                    <td>{{ forward.vps_container }}</td>
+                    <td>{{ forward.vps_port }}</td>
+                    <td><code>{{ forward.host_port }}</code></td>
+                    <td>{{ forward.protocol }}</td>
+                    <td>{{ forward.hits }}</td>
+                    <td>{{ forward.created_at|relative_time }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="removePort({{ forward.id }})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-plug"></i>
+        <p>No port forwards configured.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Activity Log -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-history"></i>
+            Activity Log
+        </h3>
+    </div>
+
+    {% if activities %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Action</th>
+                    <th>Resource</th>
+                    <th>Details</th>
+                    <th>IP</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in activities %}
+                <tr>
+                    <td>
+                        <span class="badge badge-info">{{ activity.action }}</span>
+                    </td>
+                    <td>
+                        {% if activity.resource_type %}
+                        {{ activity.resource_type }} #{{ activity.resource_id }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>{{ activity.details|truncate(50) }}</td>
+                    <td>{{ activity.ip_address or '-' }}</td>
+                    <td>{{ activity.created_at|relative_time }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-history"></i>
+        <p>No activity recorded for this user.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Edit user
+    function editUser() {
+        window.location.href = "{{ url_for('admin_users') }}?edit={{ user.id }}";
+    }
+
+    // Delete user
+    function deleteUser() {
+        if (!confirm('Are you sure you want to delete this user? This will also delete all their Server and cannot be undone.')) {
+            return;
+        }
+
+        showLoading();
+
+        fetch('/admin/users/{{ user.id }}/delete', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('User deleted successfully', 'success');
+                setTimeout(() => window.location.href = "{{ url_for('admin_users') }}", 1500);
+            } else {
+                showToast(data.error || 'Failed to delete user', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Delete user error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            hideLoading();
+        });
+    }
+
+    // Remove port forward
+    async function removePort(forwardId) {
+        if (!confirm('Remove this port forward?')) {
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch(`/ports/remove/${forwardId}`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Port forward removed', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(result.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Remove port error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+</script>
+{% endblock %}

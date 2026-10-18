@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Administration{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Admin</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Quick Stats -->
+<div class="grid grid-4" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value">{{ total_users }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-server"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Server</div>
+            <div class="stat-value">{{ total_vps }}</div>
+            <div class="stat-change">{{ running_vps }} running</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-ban"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Suspended Server</div>
+            <div class="stat-value">{{ suspended_vps }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-plug"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Port Usage</div>
+            <div class="stat-value">{{ used_ports }}/{{ total_ports }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- System Health -->
+<div class="grid grid-2" style="margin-bottom: 2rem;">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-heartbeat"></i>
+                System Health
+            </h3>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span>CPU Usage</span>
+                <span>{{ host_stats.cpu|round(1) }}%</span>
+            </div>
+            <div class="progress">
+                <div class="progress-bar {% if host_stats.cpu > 80 %}danger{% elif host_stats.cpu > 60 %}warning{% else %}success{% endif %}" 
+                     style="width: {{ host_stats.cpu }}%;"></div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span>RAM Usage</span>
+                <span>{{ host_stats.ram.percent|round(1) }}% ({{ host_stats.ram.used }}MB / {{ host_stats.ram.total }}MB)</span>
+            </div>
+            <div class="progress">
+                <div class="progress-bar {% if host_stats.ram.percent > 80 %}danger{% elif host_stats.ram.percent > 60 %}warning{% else %}success{% endif %}" 
+                     style="width: {{ host_stats.ram.percent }}%;"></div>
+            </div>
+        </div>
+
+        <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span>Disk Usage</span>
+                <span>{{ host_stats.disk.percent }}</span>
+            </div>
+            <div class="progress">
+                <div class="progress-bar {% if host_stats.disk.percent|replace('%','')|int > 80 %}danger{% elif host_stats.disk.percent|replace('%','')|int > 60 %}warning{% else %}success{% endif %}" 
+                     style="width: {{ host_stats.disk.percent|replace('%','') }}%;"></div>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+                {{ host_stats.disk.used }} / {{ host_stats.disk.total }} (Free: {{ host_stats.disk.free }})
+            </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <div>
+                    <span style="color: var(--text-muted);">Uptime:</span>
+                    <span class="badge badge-info">{{ host_stats.uptime }}</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Nodes Online:</span>
+                    <span class="badge badge-success">{{ online_nodes }}/{{ total_nodes }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-bolt"></i>
+                Quick Actions
+            </h3>
+        </div>
+
+        <div class="grid grid-2" style="gap: 1rem;">
+            <a href="{{ url_for('admin_vps_create') }}" class="btn btn-primary btn-block">
+                <i class="fas fa-plus"></i> New Server
+            </a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline btn-block">
+                <i class="fas fa-users"></i> Manage Users
+            </a>
+            <a href="{{ url_for('admin_nodes') }}" class="btn btn-outline btn-block">
+                <i class="fas fa-network-wired"></i> Manage Nodes
+            </a>
+            <a href="{{ url_for('admin_settings') }}" class="btn btn-outline btn-block">
+                <i class="fas fa-cog"></i> Settings
+            </a>
+            <button class="btn btn-warning btn-block" onclick="runResourceCheck()">
+                <i class="fas fa-search"></i> Check Resources
+            </button>
+            <button class="btn btn-danger btn-block" onclick="emergencyStopAll()">
+                <i class="fas fa-stop-circle"></i> Emergency Stop
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Node Status -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-network-wired"></i>
+            Node Status
+        </h3>
+        <button class="btn btn-sm btn-outline" onclick="refreshNodes()">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <div class="grid grid-3">
+        {% for node in node_status %}
+        <div class="stat-card" style="padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 1rem; width: 100%;">
+                <div class="stat-icon {% if node.online %}success{% else %}danger{% endif %}" style="width: 40px; height: 40px;">
+                    <i class="fas fa-{% if node.online %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+                </div>
+                <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-weight: 600;">{{ node.name }}</span>
+                        <span class="badge badge-{{ 'success' if node.online else 'danger' }}">
+                            {{ node.status }}
+                        </span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ node.location }}</div>
+                    <div style="margin-top: 0.5rem;">
+                        <span class="badge badge-info">{{ node.vps_count }}/{{ node.total_vps }} Server</span>
+                        {% if node.online and node.stats %}
+                        <span class="badge" style="background-color: var(--bg-tertiary);">
+                            CPU: {{ node.stats.cpu|round(1) }}%
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% if node.online and node.stats %}
+            <div style="margin-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem;">
+                    <span>RAM: {{ node.stats.ram.percent|round(1) }}%</span>
+                    <span>Disk: {{ node.stats.disk.percent }}</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-history"></i>
+            Recent Activity
+        </h3>
+    </div>
+
+    {% if recent_activity %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Resource</th>
+                    <th>Details</th>
+                    <th>IP</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in recent_activity %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="user-avatar" style="width: 24px; height: 24px; font-size: 0.7rem;">
+                                {{ activity.username[:1].upper() if activity.username else '?' }}
+                            </div>
+                            <span>{{ activity.username or 'System' }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ activity.action }}</span>
+                    </td>
+                    <td>
+                        {% if activity.resource_type %}
+                        {{ activity.resource_type }} #{{ activity.resource_id }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>{{ activity.details|truncate(50) }}</td>
+                    <td>{{ activity.ip_address or '-' }}</td>
+                    <td>{{ activity.created_at|relative_time }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-history"></i>
+        <p>No activity recorded yet</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Run resource check
+    async function runResourceCheck() {
+        if (!confirm('Run resource check on all Server? This may suspend Server with high usage.')) {
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch('/admin/resource-check', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(`Resource check complete. ${result.suspended} Server suspended.`, 'success');
+            } else {
+                showToast(result.error || 'Resource check failed', 'danger');
+            }
+        } catch (error) {
+            console.error('Resource check error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Emergency stop all Server
+    async function emergencyStopAll() {
+        if (!confirm('WARNING: This will stop ALL running Server. Are you absolutely sure?')) {
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch('/admin/emergency-stop-all', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(`Emergency stop complete. ${result.stopped} Server stopped.`, 'warning');
+            } else {
+                showToast(result.error || 'Emergency stop failed', 'danger');
+            }
+        } catch (error) {
+            console.error('Emergency stop error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Refresh nodes
+    function refreshNodes() {
+        showLoading();
+        window.location.reload();
+    }
+</script>
+{% endblock %}

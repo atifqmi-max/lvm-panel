@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+
+{% block title %}Create Node - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Create New Node{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_nodes') }}" class="breadcrumb-item">Nodes</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Create Node</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">
+            <i class="fas fa-network-wired"></i>
+            Create New Node
+        </h2>
+        <p style="color: var(--text-muted); margin: 0;">
+            Add a new LXD node to your infrastructure
+        </p>
+    </div>
+    <a href="{{ url_for('admin_nodes') }}" class="btn btn-outline">
+        <i class="fas fa-arrow-left"></i> Back to Nodes
+    </a>
+</div>
+
+<!-- Create Form -->
+<form id="createNodeForm">
+    <div class="grid grid-2">
+        <!-- Basic Information -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-info-circle"></i>
+                    Basic Information
+                </h3>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Node Name <span style="color: var(--accent-danger);">*</span></label>
+                <input type="text" id="name" class="form-control" placeholder="e.g., node-us-01" required>
+                <small style="color: var(--text-muted);">Unique identifier for this node</small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Location <span style="color: var(--accent-danger);">*</span></label>
+                <input type="text" id="location" class="form-control" placeholder="e.g., New York, USA" required>
+                <small style="color: var(--text-muted);">Physical location of the node</small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Server Capacity</label>
+                <input type="number" id="total_vps" class="form-control" value="50" min="1" max="1000">
+                <small style="color: var(--text-muted);">Maximum number of Server this node can host</small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Tags (comma-separated)</label>
+                <input type="text" id="tags" class="form-control" placeholder="e.g., production, high-performance, ssd">
+                <small style="color: var(--text-muted);">Optional tags for categorization</small>
+            </div>
+        </div>
+
+        <!-- Connection Settings -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-plug"></i>
+                    Connection Settings
+                </h3>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="is_remote" style="width: auto; margin: 0;" onchange="toggleRemoteSettings()">
+                    Remote Node (via API)
+                </label>
+                <small style="color: var(--text-muted);">Check if this node is accessed remotely via API</small>
+            </div>
+            
+            <div id="remoteSettings" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Node URL <span style="color: var(--accent-danger);">*</span></label>
+                    <input type="text" id="url" class="form-control" placeholder="http://192.168.1.100:5000 or https://node.example.com">
+                    <small style="color: var(--text-muted);">
+                        <strong>Supported formats:</strong><br>
+                        • HTTP with IP: <code>http://192.168.1.100:5000</code><br>
+                        • HTTPS with domain: <code>https://node.example.com</code><br>
+                        • Cloudflare Tunnel: <code>https://node.yourdomain.com</code><br>
+                        • Custom port: <code>http://node.local:8080</code>
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="testNodeConnection()">
+                        <i class="fas fa-plug"></i> Test Connection
+                    </button>
+                    <span id="connectionStatus" style="margin-left: 1rem;"></span>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>Remote Node Setup:</strong>
+                        <ol style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
+                            <li>Deploy node.py on the remote server</li>
+                            <li>Ensure the node is accessible via the URL above</li>
+                            <li>An API key will be generated for authentication</li>
+                            <li>Configure the API key on the remote node</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="localSettings">
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Local node - will use the local LXD daemon on this server</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Network Configuration -->
+    <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-network-wired"></i>
+                Network Configuration
+            </h3>
+        </div>
+        
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label class="form-label">IP Addresses (comma-separated)</label>
+                <textarea id="ip_addresses" class="form-control" rows="4" placeholder="192.168.1.100, 192.168.1.101, 192.168.1.102"></textarea>
+                <small style="color: var(--text-muted);">Available IP addresses for Server on this node</small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">IP Aliases (comma-separated)</label>
+                <textarea id="ip_aliases" class="form-control" rows="4" placeholder="alias1, alias2, alias3"></textarea>
+                <small style="color: var(--text-muted);">Optional aliases for IP addresses</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="card" style="margin-top: 1.5rem; background-color: var(--bg-secondary);">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-eye"></i>
+                Node Preview
+            </h3>
+        </div>
+        
+        <div class="grid grid-3">
+            <div style="padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm); text-align: center;">
+                <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Node Name</div>
+                <div style="font-weight: 600; font-size: 1.125rem;" id="preview_name">-</div>
+            </div>
+            
+            <div style="padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm); text-align: center;">
+                <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Location</div>
+                <div style="font-weight: 600; font-size: 1.125rem;" id="preview_location">-</div>
+            </div>
+            
+            <div style="padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm); text-align: center;">
+                <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Type</div>
+                <div style="font-weight: 600; font-size: 1.125rem;" id="preview_type">Local</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1rem; padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+            <div style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Capacity</div>
+            <div style="font-weight: 600;">
+                <span id="preview_capacity">50</span> Server maximum
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+        <a href="{{ url_for('admin_nodes') }}" class="btn btn-outline">
+            <i class="fas fa-times"></i> Cancel
+        </a>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create Node
+        </button>
+    </div>
+</form>
+
+<!-- API Key Modal -->
+<div class="modal" id="apiKeyModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Node Created Successfully</h3>
+        </div>
+        <div class="modal-body">
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <span>Node has been created successfully!</span>
+            </div>
+            
+            <div id="apiKeyDisplay" style="display: none;">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Save this API key - it will only be shown once!</span>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="generatedApiKey" class="form-control" readonly>
+                        <button class="btn btn-outline" onclick="copyApiKey()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="closeApiKeyModal()">
+                <i class="fas fa-check"></i> Done
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle remote settings
+    function toggleRemoteSettings() {
+        const isRemote = document.getElementById('is_remote').checked;
+        const remoteSettings = document.getElementById('remoteSettings');
+        const localSettings = document.getElementById('localSettings');
+        
+        if (isRemote) {
+            remoteSettings.style.display = 'block';
+            localSettings.style.display = 'none';
+            document.getElementById('url').required = true;
+            updatePreview();
+        } else {
+            remoteSettings.style.display = 'none';
+            localSettings.style.display = 'block';
+            document.getElementById('url').required = false;
+            updatePreview();
+        }
+    }
+    
+    // Test node connection
+    async function testNodeConnection() {
+        const url = document.getElementById('url').value.trim();
+        const statusEl = document.getElementById('connectionStatus');
+        
+        if (!url) {
+            statusEl.innerHTML = '<span style="color: var(--accent-warning);"><i class="fas fa-exclamation-triangle"></i> Please enter a URL</span>';
+            return;
+        }
+        
+        // Validate URL format
+        if (!isValidNodeUrl(url)) {
+            statusEl.innerHTML = '<span style="color: var(--accent-danger);"><i class="fas fa-times-circle"></i> Invalid URL format</span>';
+            return;
+        }
+        
+        statusEl.innerHTML = '<span style="color: var(--accent-info);"><i class="fas fa-spinner fa-spin"></i> Testing connection...</span>';
+        
+        try {
+            const response = await fetch('/admin/nodes/test-connection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: url })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                statusEl.innerHTML = '<span style="color: var(--accent-success);"><i class="fas fa-check-circle"></i> Connection successful!</span>';
+                if (result.node_info) {
+                    statusEl.innerHTML += `<br><small style="color: var(--text-muted);">Node: ${result.node_info.hostname || 'Unknown'} | Version: ${result.node_info.version || 'Unknown'}</small>`;
+                }
+            } else {
+                statusEl.innerHTML = '<span style="color: var(--accent-danger);"><i class="fas fa-times-circle"></i> ' + (result.error || 'Connection failed') + '</span>';
+            }
+        } catch (error) {
+            statusEl.innerHTML = '<span style="color: var(--accent-danger);"><i class="fas fa-times-circle"></i> Network error: ' + error.message + '</span>';
+        }
+    }
+    
+    // Validate node URL format
+    function isValidNodeUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            
+            // Must be http or https
+            if (!['http:', 'https:'].includes(urlObj.protocol)) {
+                return false;
+            }
+            
+            // Must have hostname
+            if (!urlObj.hostname) {
+                return false;
+            }
+            
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+    
+    // Update preview
+    function updatePreview() {
+        const name = document.getElementById('name').value || '-';
+        const location = document.getElementById('location').value || '-';
+        const capacity = document.getElementById('total_vps').value || '50';
+        const isRemote = document.getElementById('is_remote').checked;
+        
+        document.getElementById('preview_name').textContent = name;
+        document.getElementById('preview_location').textContent = location;
+        document.getElementById('preview_capacity').textContent = capacity;
+        document.getElementById('preview_type').textContent = isRemote ? 'Remote (API)' : 'Local';
+    }
+    
+    // Add event listeners for real-time preview
+    document.getElementById('name').addEventListener('input', updatePreview);
+    document.getElementById('location').addEventListener('input', updatePreview);
+    document.getElementById('total_vps').addEventListener('input', updatePreview);
+    
+    // Form submission
+    document.getElementById('createNodeForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const name = document.getElementById('name').value.trim();
+        const location = document.getElementById('location').value.trim();
+        const total_vps = parseInt(document.getElementById('total_vps').value);
+        const tags = document.getElementById('tags').value.trim();
+        const isRemote = document.getElementById('is_remote').checked;
+        let url = document.getElementById('url').value.trim();
+        const ip_addresses = document.getElementById('ip_addresses').value.trim();
+        const ip_aliases = document.getElementById('ip_aliases').value.trim();
+        
+        // Validation
+        if (!name || !location) {
+            showToast('Please fill in all required fields', 'warning');
+            return;
+        }
+        
+        if (isRemote && !url) {
+            showToast('Please provide a URL for remote node', 'warning');
+            return;
+        }
+        
+        // Validate and normalize URL
+        if (isRemote) {
+            if (!isValidNodeUrl(url)) {
+                showToast('Invalid URL format. Use http://ip:port or https://domain.com', 'warning');
+                return;
+            }
+            
+            // Ensure URL doesn't end with slash
+            url = url.replace(/\/$/, '');
+        }
+        
+        if (total_vps < 1 || total_vps > 1000) {
+            showToast('Server capacity must be between 1 and 1000', 'warning');
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await fetch('/admin/nodes/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    location: location,
+                    total_vps: total_vps,
+                    tags: tags,
+                    url: isRemote ? url : '',
+                    ip_addresses: ip_addresses,
+                    ip_aliases: ip_aliases
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Show API key if remote node
+                if (result.api_key) {
+                    document.getElementById('generatedApiKey').value = result.api_key;
+                    document.getElementById('apiKeyDisplay').style.display = 'block';
+                }
+                
+                showModal('apiKeyModal');
+            } else {
+                showToast(result.error || 'Failed to create node', 'danger');
+            }
+        } catch (error) {
+            console.error('Create node error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    });
+    
+    // Copy API key
+    function copyApiKey() {
+        const apiKeyInput = document.getElementById('generatedApiKey');
+        apiKeyInput.select();
+        document.execCommand('copy');
+        showToast('API key copied to clipboard', 'success');
+    }
+    
+    // Close modal and redirect
+    function closeApiKeyModal() {
+        hideModal('apiKeyModal');
+        window.location.href = "{{ url_for('admin_nodes') }}";
+    }
+    
+    // Modal helpers
+    function showModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+    }
+    
+    function hideModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+    }
+</script>
+{% endblock %}

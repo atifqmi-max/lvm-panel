@@ -1,0 +1,128 @@
+<!-- templates/errors/maintenance.html -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintenance Mode - {{ panel_name }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0d0f1c;
+            --bg-secondary: #1a1b2f;
+            --text-primary: #ffffff;
+            --text-secondary: #b8bacf;
+            --primary-500: #2196f3;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .maintenance-card {
+            background: var(--bg-secondary);
+            border-radius: 1rem;
+            padding: 3rem;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .icon {
+            font-size: 4rem;
+            color: var(--primary-500);
+            margin-bottom: 1.5rem;
+            animation: wrench 2s ease-in-out infinite;
+        }
+        
+        @keyframes wrench {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(15deg); }
+            75% { transform: rotate(-15deg); }
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        .progress {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 999px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+        
+        .progress-bar {
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-500), #64b5f6);
+            border-radius: 999px;
+            animation: progress 2s ease-in-out infinite;
+        }
+        
+        @keyframes progress {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(200%); }
+            100% { transform: translateX(-100%); }
+        }
+        
+        .eta {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .eta span {
+            color: var(--primary-500);
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .maintenance-card {
+                padding: 2rem;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="maintenance-card">
+        <i class="fas fa-tools icon"></i>
+        <h1>{{ panel_name }} - Maintenance Mode</h1>
+        <p>{{ message }}</p>
+        <div class="progress">
+            <div class="progress-bar"></div>
+        </div>
+        <div class="eta">
+            <i class="far fa-clock"></i>
+            <span>Estimated time:</span> 15-30 minutes
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,629 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Users - {{ panel_name }}{% endblock %}
+
+{% block header_title %}User Management{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Users</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header Actions -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <h2 style="font-size: 1.25rem; margin: 0;">System Users</h2>
+    <a href="{{ url_for('admin_users_create') }}" class="btn btn-primary">
+        <i class="fas fa-user-plus"></i> Create User
+    </a>
+</div>
+
+<!-- Quick Stats -->
+<div class="grid grid-4" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value">{{ users|length }}</div>
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-user-shield"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Administrators</div>
+            <div class="stat-value">{{ users|selectattr('is_admin', 'equalto', 1)|list|length }}</div>
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-server"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total Server</div>
+            <div class="stat-value" id="totalServerCount">
+                {% set total_vps = namespace(count=0) %}
+                {% for user in users %}
+                    {% set total_vps.count = total_vps.count + (user.vps_count or 0) %}
+                {% endfor %}
+                {{ total_vps.count }}
+            </div>
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Expiring Server</div>
+            <div class="stat-value" id="totalExpiringCount">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="{{ url_for('admin_users') }}">
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <input type="text" name="search" class="form-control" placeholder="Search by username or email..." value="{{ search_query or '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i> Search
+            </button>
+            {% if search_query %}
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline">
+                <i class="fas fa-times"></i> Clear
+            </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Users Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Server Count</th>
+                    <th>Expiring Server</th>
+                    <th>Port Quota</th>
+                    <th>Last Active</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="user-avatar" style="width: 32px; height: 32px;">
+                                {% if user.profile_picture %}
+                                <img src="{{ user.profile_picture }}" alt="{{ user.username }}">
+                                {% else %}
+                                <span>{{ user.username[:1].upper() }}</span>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <div style="font-weight: 600;">{{ user.username }}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">{{ user.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        {% if user.is_main_admin %}
+                        <span class="badge badge-danger">Main Admin</span>
+                        {% elif user.is_admin %}
+                        <span class="badge badge-warning">Admin</span>
+                        {% else %}
+                        <span class="badge badge-success">User</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ user.vps_count or 0 }}</td>
+                    <td>
+                        <div class="expiring-vps-cell" data-user-id="{{ user.id }}">
+                            <span class="badge badge-secondary">
+                                <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ user.used_ports or 0 }} / {{ user.port_quota or 0 }}</span>
+                    </td>
+                    <td>{{ user.last_active|relative_time if user.last_active else 'Never' }}</td>
+                    <td>{{ user.created_at|relative_time }}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <a href="{{ url_for('admin_user_detail', user_id=user.id) }}" class="btn btn-sm btn-outline" data-tooltip="View Details">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{{ url_for('admin_user_edit', user_id=user.id) }}" class="btn btn-sm btn-outline" data-tooltip="Edit User">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {% if not user.is_main_admin %}
+                            <button class="btn btn-sm btn-danger" onclick="deleteUser({{ user.id }}, '{{ user.username| e }}')" data-tooltip="Delete User">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 2rem; flex-wrap: wrap;">
+        {% if page > 1 %}
+        <a href="?page={{ page-1 }}{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm btn-outline">
+            <i class="fas fa-chevron-left"></i> Prev
+        </a>
+        {% endif %}
+
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="btn btn-sm btn-primary">{{ p }}</span>
+            {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+            <a href="?page={{ p }}{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm btn-outline">{{ p }}</a>
+            {% elif p == 4 and page > 5 or p == total_pages - 3 and page < total_pages - 4 %}
+            <span class="btn btn-sm btn-outline disabled">...</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="?page={{ page+1 }}{% if search_query %}&search={{ search_query }}{% endif %}" class="btn btn-sm btn-outline">
+            Next <i class="fas fa-chevron-right"></i>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Create User Modal -->
+<div class="modal" id="createUserModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Create New User</h3>
+            <button class="modal-close" onclick="hideModal('createUserModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" id="newUsername" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" id="newEmail" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" id="newPassword" required autocomplete="new-password">
+                    <small style="color: var(--text-muted);">Minimum 8 characters</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Role</label>
+                    <select class="form-control" id="newRole">
+                        <option value="user">User</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Port Quota</label>
+                    <input type="number" class="form-control" id="newPortQuota" value="5" min="0" max="1000">
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="hideModal('createUserModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="createUser()">Create User</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal" id="editUserModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit User</h3>
+            <button class="modal-close" onclick="hideModal('editUserModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editUserId">
+            <form id="editUserForm">
+                <div class="form-group">
+                    <label class="form-checkbox" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="editIsAdmin">
+                        <span>Administrator privileges</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Port Quota</label>
+                    <input type="number" class="form-control" id="editPortQuota" min="0" max="1000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Reset Password (optional)</label>
+                    <input type="password" class="form-control" id="editPassword" placeholder="Leave blank to keep current" autocomplete="new-password">
+                    <small style="color: var(--text-muted);">Minimum 8 characters if changing</small>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="hideModal('editUserModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveUserChanges()">Save Changes</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .btn-xs {
+        padding: 0.15rem 0.5rem;
+        font-size: 0.7rem;
+        border-radius: 0.25rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 1rem;
+    }
+    
+    .modal-content {
+        background: var(--card-bg);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        max-width: 600px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    .expiring-vps-cell .badge {
+        transition: all 0.2s ease;
+    }
+    
+    .expiring-vps-cell .badge:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ───────────────────────────────────────────────
+//  Load Expiring Server Data
+// ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadAllExpiringServer();
+});
+
+async function loadAllExpiringServer() {
+    try {
+        // Get all expiring Server
+        const response = await fetch('/admin/vps/expiring?days=30');
+        const data = await response.json();
+        
+        if (data.success) {
+            const expiringServer = data.data;
+            
+            // Group by user
+            const userExpiringMap = {};
+            expiringServer.forEach(vps => {
+                const userId = vps.user_id;
+                if (!userExpiringMap[userId]) {
+                    userExpiringMap[userId] = {
+                        total: 0,
+                        critical: 0,
+                        warning: 0,
+                        vps: []
+                    };
+                }
+                userExpiringMap[userId].total++;
+                userExpiringMap[userId].vps.push(vps);
+                
+                if (vps.is_expired || vps.days_remaining <= 1) {
+                    userExpiringMap[userId].critical++;
+                } else if (vps.days_remaining <= 7) {
+                    userExpiringMap[userId].warning++;
+                }
+            });
+            
+            // Update each user's cell
+            document.querySelectorAll('.expiring-vps-cell').forEach(cell => {
+                const userId = parseInt(cell.dataset.userId);
+                const userExpiring = userExpiringMap[userId];
+                
+                if (userExpiring && userExpiring.total > 0) {
+                    let badgeClass = 'badge-info';
+                    let icon = 'clock';
+                    
+                    if (userExpiring.critical > 0) {
+                        badgeClass = 'badge-danger';
+                        icon = 'exclamation-triangle';
+                    } else if (userExpiring.warning > 0) {
+                        badgeClass = 'badge-warning';
+                        icon = 'clock';
+                    }
+                    
+                    cell.innerHTML = `
+                        <button class="badge ${badgeClass}" onclick="showUserExpiringServer(${userId}, event)" style="cursor: pointer; border: none; padding: 0.35rem 0.75rem;">
+                            <i class="fas fa-${icon}"></i> ${userExpiring.total}
+                        </button>
+                    `;
+                    
+                    // Store data for modal
+                    cell.dataset.expiringVps = JSON.stringify(userExpiring.vps);
+                } else {
+                    cell.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> None</span>';
+                }
+            });
+            
+            // Update total count
+            const totalExpiringCount = expiringServer.length;
+            document.getElementById('totalExpiringCount').textContent = totalExpiringCount;
+            
+        } else {
+            console.error('Failed to load expiring Server:', data.error);
+            document.querySelectorAll('.expiring-vps-cell').forEach(cell => {
+                cell.innerHTML = '<span class="badge badge-secondary">-</span>';
+            });
+            document.getElementById('totalExpiringCount').textContent = '0';
+        }
+    } catch (error) {
+        console.error('Error loading expiring Server:', error);
+        document.querySelectorAll('.expiring-vps-cell').forEach(cell => {
+            cell.innerHTML = '<span class="badge badge-secondary">Error</span>';
+        });
+        document.getElementById('totalExpiringCount').textContent = '0';
+    }
+}
+
+function showUserExpiringServer(userId, event) {
+    event.stopPropagation();
+    
+    const cell = document.querySelector(`.expiring-vps-cell[data-user-id="${userId}"]`);
+    const expiringServer = JSON.parse(cell.dataset.expiringVps || '[]');
+    
+    if (expiringServer.length === 0) {
+        showToast('No expiring Server for this user', 'info');
+        return;
+    }
+    
+    // Sort by days remaining
+    expiringServer.sort((a, b) => a.days_remaining - b.days_remaining);
+    
+    let html = `
+        <div style="max-height: 500px; overflow-y: auto;">
+            <h3 style="margin-bottom: 1rem;">Expiring Server for ${expiringServer[0].username} (${expiringServer.length})</h3>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+    `;
+    
+    expiringServer.forEach(vps => {
+        const statusClass = vps.is_expired ? 'badge-danger' : (vps.days_remaining <= 3 ? 'badge-warning' : 'badge-info');
+        const statusText = vps.is_expired ? 'EXPIRED' : (vps.days_remaining === 0 ? `${vps.hours_remaining}h left` : `${vps.days_remaining}d left`);
+        const borderColor = vps.is_expired ? 'var(--accent-danger)' : (vps.days_remaining <= 3 ? 'var(--accent-warning)' : 'var(--accent-info)');
+        
+        html += `
+            <div style="padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm); border-left: 3px solid ${borderColor};">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                    <div>
+                        <div style="font-weight: 600; margin-bottom: 0.25rem;">${vps.hostname || vps.container_name}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${vps.container_name}</div>
+                    </div>
+                    <span class="badge ${statusClass}">${statusText}</span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">
+                    <i class="fas fa-clock"></i> Expires: ${vps.expires_at_formatted}
+                </div>
+                ${vps.suspended ? '<div style="margin-top: 0.5rem;"><span class="badge badge-danger">Suspended</span></div>' : ''}
+                <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                    <a href="/admin/vps/${vps.id}/edit" class="btn btn-xs btn-outline">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                    <button class="btn btn-xs btn-success" onclick="renewServerFromUserModal(${vps.id}, '${vps.hostname || vps.container_name}')">
+                        <i class="fas fa-redo"></i> Renew
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 700px;">
+            ${html}
+            <div style="margin-top: 1.5rem; text-align: right;">
+                <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Close</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function renewServerFromUserModal(vpsId, vpsName) {
+    const days = prompt(`Renew "${vpsName}" for how many days?`, '30');
+    if (days === null || days === '') return;
+    
+    const daysNum = parseInt(days);
+    if (isNaN(daysNum) || daysNum <= 0) {
+        showToast('Please enter a valid number of days', 'danger');
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const response = await fetch(`/admin/vps/${vpsId}/renew`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ days: daysNum })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`Server renewed for ${daysNum} days`, 'success');
+            // Close modal and reload data
+            document.querySelector('.modal-overlay')?.remove();
+            setTimeout(() => loadAllExpiringServer(), 1000);
+        } else {
+            showToast(result.error || 'Failed to renew Server', 'danger');
+        }
+    } catch (error) {
+        console.error('Renew error:', error);
+        showToast('Network error: ' + error.message, 'danger');
+    } finally {
+        hideLoading();
+    }
+}
+
+// ───────────────────────────────────────────────
+//  Modal Helpers
+// ───────────────────────────────────────────────
+function showModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+    }
+}
+
+function hideModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+    }
+}
+
+// ───────────────────────────────────────────────
+//  Create User
+// ───────────────────────────────────────────────
+async function showCreateUserModal() {
+    document.getElementById('createUserForm').reset();
+    showModal('createUserModal');
+}
+
+async function createUser() {
+    const btn = event.target;
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    const username = document.getElementById('newUsername').value.trim();
+    const email    = document.getElementById('newEmail').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const role     = document.getElementById('newRole').value;
+    const portQuota = parseInt(document.getElementById('newPortQuota').value) || 0;
+
+    if (!username || !email || !password) {
+        showToast('Please fill all required fields', 'warning');
+        btn.disabled = false;
+        return;
+    }
+
+    if (password.length < 8) {
+        showToast('Password must be at least 8 characters', 'warning');
+        btn.disabled = false;
+        return;
+    }
+
+    showLoading();
+
+    try {
+        const formData = new FormData();
+        formData.append('username', username);
+        formData.append('email', email);
+        formData.append('password', password);
+        formData.append('is_admin', role === 'admin');
+        formData.append('port_quota', portQuota);
+
+        const res = await fetch('/admin/user/create', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (data.success) {
+            showToast('User created successfully', 'success');
+            hideModal('createUserModal');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast(data.error || 'Failed to create user', 'danger');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Network or server error', 'danger');
+    } finally {
+        hideLoading();
+        btn.disabled = false;
+    }
+}
+
+// ───────────────────────────────────────────────
+//  Delete User
+// ───────────────────────────────────────────────
+function deleteUser(userId, username) {
+    if (!confirm(`Really delete user "${username}"?\nThis action cannot be undone and will remove all associated Server.`)) {
+        return;
+    }
+
+    showLoading();
+
+    fetch(`/admin/users/${userId}/delete`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('User deleted successfully', 'success');
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                showToast(data.error || 'Delete failed', 'danger');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Network error', 'danger');
+        })
+        .finally(hideLoading);
+}
+</script>
+{% endblock %}
