@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Create New User - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Create New User{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_users') }}" class="breadcrumb-item">Users</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Create</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-user-plus"></i>
+            New User Account
+        </h3>
+    </div>
+
+    <form id="createUserForm">
+        <div class="grid grid-2">
+            <!-- Basic Information -->
+            <div class="form-group">
+                <label class="form-label">Username <span style="color: var(--accent-danger);">*</span></label>
+                <input type="text" id="username" class="form-control" required minlength="3" maxlength="32" autocomplete="off">
+                <small style="color: var(--text-muted);">3-32 characters, alphanumeric and underscores</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email Address <span style="color: var(--accent-danger);">*</span></label>
+                <input type="email" id="email" class="form-control" required autocomplete="off">
+                <small style="color: var(--text-muted);">Valid email address required</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password <span style="color: var(--accent-danger);">*</span></label>
+                <div style="position: relative;">
+                    <input type="password" id="password" class="form-control" required minlength="8" autocomplete="new-password">
+                    <button type="button" class="btn btn-icon" onclick="togglePassword()" style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);">
+                        <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                    </button>
+                </div>
+                <small style="color: var(--text-muted);">Minimum 8 characters</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Confirm Password <span style="color: var(--accent-danger);">*</span></label>
+                <input type="password" id="confirmPassword" class="form-control" required minlength="8" autocomplete="new-password">
+                <small style="color: var(--text-muted);">Must match password</small>
+            </div>
+        </div>
+
+        <!-- Permissions & Quotas -->
+        <div style="margin: 1.5rem 0; padding: 1rem; background-color: var(--bg-secondary); border-radius: var(--border-radius-sm); border: 1px solid var(--border-color);">
+            <h4 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fas fa-user-shield"></i>
+                Permissions & Quotas
+            </h4>
+            
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="is_admin" style="width: auto; margin: 0;">
+                        Grant Administrator Privileges
+                    </label>
+                    <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                        Admins can manage users, Server, and system settings
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Port Forwarding Quota</label>
+                    <input type="number" id="port_quota" class="form-control" value="10" min="0" max="1000">
+                    <small style="color: var(--text-muted);">Number of ports user can forward</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Summary -->
+        <div style="margin: 1.5rem 0; padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+            <h4 style="margin-bottom: 1rem;">Account Summary</h4>
+            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                <div>
+                    <span style="color: var(--text-muted);">Username:</span>
+                    <span id="summary-username" style="font-weight: 600; margin-left: 0.5rem;">-</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Email:</span>
+                    <span id="summary-email" style="font-weight: 600; margin-left: 0.5rem;">-</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Role:</span>
+                    <span id="summary-role" style="font-weight: 600; margin-left: 0.5rem;">User</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Port Quota:</span>
+                    <span id="summary-quota" style="font-weight: 600; margin-left: 0.5rem;">10</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline">
+                <i class="fas fa-times"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-user-plus"></i> Create User
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update summary in real-time
+    document.getElementById('username').addEventListener('input', function(e) {
+        document.getElementById('summary-username').textContent = e.target.value || '-';
+    });
+
+    document.getElementById('email').addEventListener('input', function(e) {
+        document.getElementById('summary-email').textContent = e.target.value || '-';
+    });
+
+    document.getElementById('is_admin').addEventListener('change', function(e) {
+        document.getElementById('summary-role').textContent = e.target.checked ? 'Administrator' : 'User';
+    });
+
+    document.getElementById('port_quota').addEventListener('input', function(e) {
+        document.getElementById('summary-quota').textContent = e.target.value;
+    });
+
+    // Toggle password visibility
+    function togglePassword() {
+        const passwordInput = document.getElementById('password');
+        const icon = document.getElementById('passwordToggleIcon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            passwordInput.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
+
+    // Form submission
+    document.getElementById('createUserForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const is_admin = document.getElementById('is_admin').checked;
+        const port_quota = parseInt(document.getElementById('port_quota').value);
+
+        // Validation
+        if (!username || !email || !password) {
+            showToast('Please fill in all required fields', 'warning');
+            return;
+        }
+
+        if (username.length < 3 || username.length > 32) {
+            showToast('Username must be 3-32 characters', 'warning');
+            return;
+        }
+
+        if (password.length < 8) {
+            showToast('Password must be at least 8 characters', 'warning');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            showToast('Passwords do not match', 'warning');
+            return;
+        }
+
+        if (!email.includes('@') || !email.split('@')[1].includes('.')) {
+            showToast('Please enter a valid email address', 'warning');
+            return;
+        }
+
+        if (port_quota < 0) {
+            showToast('Port quota cannot be negative', 'warning');
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch('/admin/users/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: username,
+                    email: email,
+                    password: password,
+                    is_admin: is_admin,
+                    port_quota: port_quota
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(`User "${username}" created successfully!`, 'success');
+                setTimeout(() => {
+                    window.location.href = "{{ url_for('admin_users') }}";
+                }, 2000);
+            } else {
+                showToast(result.error || 'Failed to create user', 'danger');
+            }
+        } catch (error) {
+            console.error('Create user error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    });
+</script>
+{% endblock %}

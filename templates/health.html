@@ -1,0 +1,75 @@
+<!-- templates/health.html -->
+{% extends "base.html" %}
+
+{% block title %}Health Check - {{ panel_name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">System Health</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    {% if status == 'ok' %}
+                    <div class="bg-success bg-opacity-10 p-3 rounded-circle d-inline-block">
+                        <i class="bi bi-check-circle-fill text-success fs-1"></i>
+                    </div>
+                    <h4 class="mt-3 text-success">All Systems Operational</h4>
+                    {% else %}
+                    <div class="bg-danger bg-opacity-10 p-3 rounded-circle d-inline-block">
+                        <i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>
+                    </div>
+                    <h4 class="mt-3 text-danger">System Issues Detected</h4>
+                    {% endif %}
+                </div>
+                
+                <div class="bg-dark p-3 rounded">
+                    <pre class="mb-0 text-light" style="white-space: pre-wrap;">{{ health_data|tojson(indent=2) }}</pre>
+                </div>
+                
+                <div class="mt-4">
+                    <h6>System Components</h6>
+                    <ul class="list-group list-group-flush bg-transparent">
+                        <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                            <span>Database</span>
+                            {% if health_data.database == 'ok' %}
+                            <span class="badge bg-success">Connected</span>
+                            {% else %}
+                            <span class="badge bg-danger">Error</span>
+                            {% endif %}
+                        </li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                            <span>LXD</span>
+                            {% if health_data.lxd == 'ok' %}
+                            <span class="badge bg-success">Available</span>
+                            {% else %}
+                            <span class="badge bg-warning">Unknown</span>
+                            {% endif %}
+                        </li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                            <span>API</span>
+                            <span class="badge bg-success">Operational</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .btn-accent {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        color: white;
+    }
+    
+    .btn-accent:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: white;
+    }
+</style>
+{% endblock %}

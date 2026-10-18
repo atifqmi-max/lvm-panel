@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Server: {{ vps.hostname or vps.container_name }} - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Edit Server{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_vps') }}" class="breadcrumb-item">Server</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">{{ vps.hostname or vps.container_name }}</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Server Header -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="user-avatar" style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));">
+            <i class="fas fa-server" style="font-size: 1.25rem;"></i>
+        </div>
+        <div>
+            <h2 style="font-size: 1.25rem;">{{ vps.hostname or vps.container_name }}</h2>
+            <div style="color: var(--text-muted); font-size: 0.875rem;">Container: {{ vps.container_name }}</div>
+        </div>
+        <div style="margin-left: auto;">
+            <div class="status-indicator">
+                <span class="status-dot {% if vps.suspended %}suspended{% elif vps.status == 'running' %}running{% else %}stopped{% endif %}"></span>
+                <span>{% if vps.suspended %}Suspended{% else %}{{ vps.status|title }}{% endif %}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Form -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-edit"></i>
+            Server Configuration
+        </h3>
+    </div>
+
+    <form method="POST" action="{{ url_for('admin_vps_edit', vps_id=vps.id) }}">
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label class="form-label">Owner</label>
+                <select name="user_id" class="form-control" required>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if user.id == vps.user_id %}selected{% endif %}>
+                        {{ user.username }} ({{ user.email }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Node</label>
+                <select name="node_id" class="form-control" required>
+                    {% for node in nodes %}
+                    <option value="{{ node.id }}" {% if node.id == vps.node_id %}selected{% endif %}>
+                        {{ node.name }} ({{ node.location }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <small style="color: var(--text-muted);">Changing node will migrate the Server</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Hostname</label>
+                <input type="text" name="hostname" class="form-control" value="{{ vps.hostname or vps.container_name }}" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Operating System</label>
+                <select name="os_version" class="form-control">
+                    {% for os in os_options %}
+                    <option value="{{ os.value }}" {% if os.value == vps.os_version %}selected{% endif %}>
+                        {{ os.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small style="color: var(--text-muted);">Changing OS will reinstall the Server</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">CPU Cores</label>
+                <input type="number" name="cpu" class="form-control" value="{{ vps.cpu }}" min="1" max="64" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">RAM (GB)</label>
+                <input type="number" name="ram" class="form-control" value="{{ vps.ram|replace('GB','') }}" min="1" max="128" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Disk (GB)</label>
+                <input type="number" name="disk" class="form-control" value="{{ vps.storage|replace('GB','') }}" min="5" max="2000" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">IP Address</label>
+                <input type="text" name="ip_address" class="form-control" value="{{ vps.ip_address or '' }}" placeholder="e.g., 10.0.0.100">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">IP Alias (Display)</label>
+                <input type="text" name="ip_alias" class="form-control" value="{{ vps.ip_alias or '' }}" placeholder="e.g., vps1.example.com">
+            </div>
+        </div>
+
+        <!-- Current Status -->
+        <div style="margin: 1.5rem 0; padding: 1rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+            <h4 style="margin-bottom: 1rem;">Current Configuration</h4>
+            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                <div>
+                    <span style="color: var(--text-muted);">Created:</span>
+                    <span>{{ vps.created_at|relative_time }}</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Last Started:</span>
+                    <span>{{ vps.last_started|relative_time if vps.last_started else 'Never' }}</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Whitelisted:</span>
+                    <span>{{ 'Yes' if vps.whitelisted else 'No' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Suspension History -->
+        {% if vps.suspension_history %}
+        <div style="margin-bottom: 1.5rem;">
+            <h4 style="margin-bottom: 1rem;">Suspension History</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Reason</th>
+                            <th>By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in vps.suspension_history %}
+                        <tr>
+                            <td>{{ entry.time|relative_time }}</td>
+                            <td>{{ entry.reason }}</td>
+                            <td>{{ entry.by }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Notes -->
+        <div class="form-group">
+            <label class="form-label">Admin Notes</label>
+            <textarea name="notes" class="form-control" rows="4">{{ vps.notes or '' }}</textarea>
+        </div>
+
+        <!-- Actions -->
+        <div style="display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap;">
+            <div style="display: flex; gap: 0.5rem;">
+                {% if not vps.whitelisted %}
+                    {% if vps.suspended %}
+                    <button type="button" class="btn btn-success" onclick="unsuspendServer()">
+                        <i class="fas fa-check"></i> Unsuspend Server
+                    </button>
+                    {% else %}
+                    <button type="button" class="btn btn-warning" onclick="suspendServer()">
+                        <i class="fas fa-ban"></i> Suspend Server
+                    </button>
+                    {% endif %}
+                {% endif %}
+                
+                <button type="button" class="btn btn-outline" onclick="toggleWhitelist()">
+                    <i class="fas fa-{{ 'check-circle' if vps.whitelisted else 'circle' }}"></i>
+                    {{ 'Remove from Whitelist' if vps.whitelisted else 'Add to Whitelist' }}
+                </button>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="{{ url_for('admin_vps') }}" class="btn btn-outline">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Suspend Server
+    async function suspendServer() {
+        const reason = prompt('Enter suspension reason:', 'Admin action');
+        if (reason === null) return;
+
+        showLoading();
+
+        try {
+            const response = await fetch('/admin/vps/{{ vps.id }}/suspend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ reason: reason })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Server suspended successfully', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Failed to suspend Server', 'danger');
+            }
+        } catch (error) {
+            console.error('Suspend error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Unsuspend Server
+    async function unsuspendServer() {
+        if (!confirm('Unsuspend this Server?')) {
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch('/admin/vps/{{ vps.id }}/unsuspend', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Server unsuspended successfully', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Failed to unsuspend Server', 'danger');
+            }
+        } catch (error) {
+            console.error('Unsuspend error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Toggle whitelist
+    async function toggleWhitelist() {
+        const newState = !{{ 'true' if vps.whitelisted else 'false' }};
+        
+        showLoading();
+
+        try {
+            const response = await fetch('/admin/vps/{{ vps.id }}/whitelist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ whitelist: !newState })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Whitelist updated successfully', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Failed to update whitelist', 'danger');
+            }
+        } catch (error) {
+            console.error('Whitelist error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+</script>
+{% endblock %}

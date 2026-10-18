@@ -1,0 +1,35 @@
+<!-- templates/errors/500.html -->
+{% extends "base.html" %}
+
+{% block page_icon %}fas fa-exclamation-circle{% endblock %}
+{% block page_title %}500 - Server Error{% endblock %}
+
+{% block content %}
+<div style="min-height: 60vh; display: flex; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 500px; width: 100%; text-align: center;">
+        <div class="card-body" style="padding: 3rem;">
+            <i class="fas fa-exclamation-circle fa-5x text-danger" style="margin-bottom: 1.5rem;"></i>
+            <h1 style="font-size: 4rem; font-weight: 800; margin-bottom: 0.5rem;">500</h1>
+            <h2 style="margin-bottom: 1rem;">Internal Server Error</h2>
+            <p class="text-muted" style="margin-bottom: 2rem;">
+                Something went wrong on our end. Please try again later.
+            </p>
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <a href="javascript:location.reload()" class="btn btn-outline">
+                    <i class="fas fa-sync-alt"></i> Retry
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-home"></i> Dashboard
+                </a>
+            </div>
+            {% if current_user.is_admin %}
+            <hr style="margin: 2rem 0;">
+            <div class="text-left">
+                <p class="text-muted">Error details (admin only):</p>
+                <pre class="bg-dark p-2 rounded" style="font-size: 0.75rem; overflow-x: auto;">{{ error }}</pre>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

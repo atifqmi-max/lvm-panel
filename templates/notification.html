@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Notifications{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Notifications</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header Actions -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <h2 style="font-size: 1.25rem;">All Notifications</h2>
+    <div style="display: flex; gap: 0.75rem;">
+        <button class="btn btn-outline btn-sm" onclick="markAllRead()">
+            <i class="fas fa-check-double"></i> Mark All Read
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="clearAll()">
+            <i class="fas fa-trash"></i> Clear All
+        </button>
+    </div>
+</div>
+
+<!-- Notifications List -->
+<div class="card">
+    {% if notifications %}
+    <div class="notifications-list">
+        {% for notif in notifications %}
+        <div class="notification-item {% if not notif.read %}unread{% endif %}" data-id="{{ notif.id }}" onclick="markRead({{ notif.id }})">
+            <div class="notification-icon {{ notif.type }}">
+                <i class="fas fa-{% if notif.type == 'success' %}check-circle{% elif notif.type == 'warning' %}exclamation-triangle{% elif notif.type == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+            </div>
+            <div class="notification-content">
+                <div class="notification-title">{{ notif.title }}</div>
+                <div class="notification-message">{{ notif.message }}</div>
+                <div class="notification-time">{{ notif.created_at|relative_time }}</div>
+                {% if notif.data %}
+                <div style="margin-top: 0.5rem;">
+                    <pre style="background: var(--bg-tertiary); padding: 0.5rem; border-radius: 4px; font-size: 0.7rem; overflow-x: auto;">{{ notif.data|tojson(indent=2) }}</pre>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 2rem; flex-wrap: wrap;">
+        {% if page > 1 %}
+        <a href="?page={{ page-1 }}" class="btn btn-sm btn-outline">
+            <i class="fas fa-chevron-left"></i> Previous
+        </a>
+        {% endif %}
+        
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="btn btn-sm btn-primary">{{ p }}</span>
+            {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+            <a href="?page={{ p }}" class="btn btn-sm btn-outline">{{ p }}</a>
+            {% elif p == 4 and page > 5 %}
+            <span class="btn btn-sm btn-outline" disabled>...</span>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page < total_pages %}
+        <a href="?page={{ page+1 }}" class="btn btn-sm btn-outline">
+            Next <i class="fas fa-chevron-right"></i>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-bell-slash"></i>
+        <h3>No Notifications</h3>
+        <p>You're all caught up! No notifications to display.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+            <i class="fas fa-home"></i> Go to Dashboard
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Mark notification as read
+    async function markRead(id) {
+        try {
+            const response = await fetch(`/notifications/mark-read/${id}`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const item = document.querySelector(`.notification-item[data-id="${id}"]`);
+                if (item) {
+                    item.classList.remove('unread');
+                }
+                
+                // Update badge in header
+                notificationManager.loadNotifications();
+            }
+        } catch (error) {
+            console.error('Mark read error:', error);
+        }
+    }
+
+    // Mark all as read
+    async function markAllRead() {
+        showLoading();
+        
+        try {
+            const response = await fetch('/notifications/mark-all-read', {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                document.querySelectorAll('.notification-item.unread').forEach(item => {
+                    item.classList.remove('unread');
+                });
+                showToast('All notifications marked as read', 'success');
+                
+                // Update badge in header
+                notificationManager.loadNotifications();
+            }
+        } catch (error) {
+            console.error('Mark all read error:', error);
+            showToast('Failed to mark all as read', 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Clear all notifications
+    async function clearAll() {
+        if (!confirm('Are you sure you want to clear all notifications?')) {
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await fetch('/notifications/clear-all', {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('All notifications cleared', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            }
+        } catch (error) {
+            console.error('Clear all error:', error);
+            showToast('Failed to clear notifications', 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,503 @@
+{% extends "base.html" %}
+
+{% block title %}Expiring Server - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Expiring Server{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_vps') }}" class="breadcrumb-item">Server</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Expiring</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header with Controls -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <h2 style="font-size: 1.25rem; margin: 0;">Expiring Server Management</h2>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <select class="form-control" id="daysFilter" style="width: 150px;" onchange="changeDaysFilter()">
+            <option value="1">Next 24 hours</option>
+            <option value="3">Next 3 days</option>
+            <option value="7" selected>Next 7 days</option>
+            <option value="14">Next 14 days</option>
+            <option value="30">Next 30 days</option>
+            <option value="90">Next 90 days</option>
+        </select>
+        
+        <button class="btn btn-outline" onclick="refreshList()" title="Refresh">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+        
+        <button class="btn btn-outline" onclick="exportList()" title="Export">
+            <i class="fas fa-download"></i> Export
+        </button>
+    </div>
+</div>
+
+<!-- Statistics -->
+<div class="grid grid-4" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Already Expired</div>
+            <div class="stat-value">{{ expired_count }}</div>
+            <div class="stat-change">
+                <span style="color: var(--accent-danger);">Requires immediate attention</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Expiring Soon (7d)</div>
+            <div class="stat-value">{{ expiring_soon_count }}</div>
+            <div class="stat-change">
+                <span style="color: var(--accent-warning);">Within next 7 days</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon info">
+            <i class="fas fa-calendar-alt"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Total with Expiration</div>
+            <div class="stat-value">{{ total_with_expiration }}</div>
+            <div class="stat-change">
+                <span style="color: var(--text-muted);">Auto-suspend enabled</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-filter"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Showing</div>
+            <div class="stat-value" id="filteredCount">0</div>
+            <div class="stat-change">
+                <span style="color: var(--text-muted);" id="filterInfo">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Actions -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer;">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <span style="font-weight: 600;">Select All</span>
+            </label>
+            <span style="color: var(--text-muted); font-size: 0.875rem;" id="selectedCount">0 selected</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-success" onclick="bulkRenew()" id="bulkRenewBtn" disabled>
+                <i class="fas fa-redo"></i> Renew Selected
+            </button>
+            <button class="btn btn-warning" onclick="bulkSuspend()" id="bulkSuspendBtn" disabled>
+                <i class="fas fa-pause"></i> Suspend Selected
+            </button>
+            <button class="btn btn-danger" onclick="bulkDelete()" id="bulkDeleteBtn" disabled>
+                <i class="fas fa-trash"></i> Delete Selected
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Server List -->
+<div class="card">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+        <div class="stat-icon warning" style="width: 40px; height: 40px;">
+            <i class="fas fa-server"></i>
+        </div>
+        <div>
+            <h3 style="margin: 0; font-size: 1rem;">Server List</h3>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Server expiring within the selected timeframe</p>
+        </div>
+    </div>
+    
+    <div id="vpsList">
+        <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+            <p>Loading Server list...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Renew Modal -->
+<div class="modal" id="renewModal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3>Renew Server</h3>
+            <button class="modal-close" onclick="hideModal('renewModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom: 1rem;">Select the number of days to extend the expiration:</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                <button class="btn btn-outline" onclick="setRenewDays(7)">7 Days</button>
+                <button class="btn btn-outline" onclick="setRenewDays(15)">15 Days</button>
+                <button class="btn btn-outline" onclick="setRenewDays(30)">30 Days</button>
+                <button class="btn btn-outline" onclick="setRenewDays(90)">90 Days</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Custom Days</label>
+                <input type="number" id="renewDays" class="form-control" placeholder="Enter days" min="1" max="365" value="30">
+            </div>
+            
+            <div id="renewInfo" style="padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--border-radius-sm); margin-top: 1rem; font-size: 0.875rem;">
+                <strong>Selected Server:</strong> <span id="renewVpsCount">0</span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="hideModal('renewModal')">Cancel</button>
+            <button class="btn btn-success" onclick="confirmRenew()">
+                <i class="fas fa-redo"></i> Renew
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let vpsList = [];
+let selectedVps = new Set();
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadVpsList();
+});
+
+function loadVpsList() {
+    const days = document.getElementById('daysFilter').value;
+    const container = document.getElementById('vpsList');
+    
+    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);"><i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i><p>Loading Server list...</p></div>';
+    
+    fetch(`/admin/vps/expiring?days=${days}`, {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            vpsList = data.data;
+            document.getElementById('filteredCount').textContent = data.count;
+            document.getElementById('filterInfo').textContent = `Next ${days} days`;
+            renderVpsList();
+        } else {
+            container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-danger);">Failed to load Server list</div>';
+        }
+    })
+    .catch(err => {
+        console.error('Load error:', err);
+        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-danger);">Network error loading Server list</div>';
+    });
+}
+
+function renderVpsList() {
+    const container = document.getElementById('vpsList');
+    
+    if (vpsList.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);"><i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 1rem; color: var(--accent-success);"></i><p>No Server expiring in the selected timeframe</p></div>';
+        return;
+    }
+    
+    let html = '<div style="overflow-x: auto;"><table style="width: 100%; font-size: 0.875rem;"><thead><tr style="border-bottom: 2px solid var(--border-color);">';
+    html += '<th style="padding: 0.75rem; text-align: center; width: 40px;"><input type="checkbox" id="selectAllTable" onchange="toggleSelectAll()"></th>';
+    html += '<th style="padding: 0.75rem; text-align: left;">Server</th>';
+    html += '<th style="padding: 0.75rem; text-align: left;">User</th>';
+    html += '<th style="padding: 0.75rem; text-align: left;">Node</th>';
+    html += '<th style="padding: 0.75rem; text-align: left;">Status</th>';
+    html += '<th style="padding: 0.75rem; text-align: left;">Expires</th>';
+    html += '<th style="padding: 0.75rem; text-align: left;">Time Left</th>';
+    html += '<th style="padding: 0.75rem; text-align: center;">Actions</th>';
+    html += '</tr></thead><tbody>';
+    
+    vpsList.forEach(vps => {
+        const isSelected = selectedVps.has(vps.id);
+        const rowClass = vps.is_expired ? 'style="background: rgba(239, 68, 68, 0.1);"' : '';
+        
+        html += `<tr ${rowClass} style="border-bottom: 1px solid var(--border-color);">`;
+        html += `<td style="padding: 0.75rem; text-align: center;"><input type="checkbox" class="vps-checkbox" data-vps-id="${vps.id}" ${isSelected ? 'checked' : ''} onchange="toggleVpsSelection(${vps.id})"></td>`;
+        
+        // Server info
+        html += `<td style="padding: 0.75rem;">`;
+        html += `<div style="font-weight: 600;">${vps.hostname || vps.container_name}</div>`;
+        html += `<div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${vps.container_name}</div>`;
+        html += `</td>`;
+        
+        // User
+        html += `<td style="padding: 0.75rem;">`;
+        html += `<div>${vps.username}</div>`;
+        html += `<div style="font-size: 0.75rem; color: var(--text-muted);">${vps.email}</div>`;
+        html += `</td>`;
+        
+        // Node
+        html += `<td style="padding: 0.75rem;">${vps.node_name}</td>`;
+        
+        // Status
+        html += `<td style="padding: 0.75rem;">`;
+        if (vps.suspended) {
+            html += `<span class="badge danger">Suspended</span>`;
+        } else if (vps.status === 'running') {
+            html += `<span class="badge success">Running</span>`;
+        } else {
+            html += `<span class="badge warning">${vps.status}</span>`;
+        }
+        html += `</td>`;
+        
+        // Expires
+        html += `<td style="padding: 0.75rem;">${vps.expires_at_formatted}</td>`;
+        
+        // Time left
+        html += `<td style="padding: 0.75rem;">`;
+        if (vps.is_expired) {
+            html += `<span class="badge danger"><i class="fas fa-exclamation-triangle"></i> Expired</span>`;
+        } else if (vps.days_remaining === 0) {
+            html += `<span class="badge warning">${vps.hours_remaining}h left</span>`;
+        } else if (vps.days_remaining <= 3) {
+            html += `<span class="badge warning">${vps.days_remaining}d left</span>`;
+        } else {
+            html += `<span class="badge info">${vps.days_remaining}d left</span>`;
+        }
+        html += `</td>`;
+        
+        // Actions
+        html += `<td style="padding: 0.75rem; text-align: center;">`;
+        html += `<div style="display: flex; gap: 0.25rem; justify-content: center;">`;
+        html += `<button class="btn btn-sm btn-success" onclick="renewSingle(${vps.id})" title="Renew"><i class="fas fa-redo"></i></button>`;
+        html += `<a href="/admin/vps/${vps.id}/edit" class="btn btn-sm btn-outline" title="Edit"><i class="fas fa-edit"></i></a>`;
+        html += `<a href="/vps/${vps.id}" class="btn btn-sm btn-outline" title="View"><i class="fas fa-eye"></i></a>`;
+        html += `</div>`;
+        html += `</td>`;
+        
+        html += `</tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.vps-checkbox');
+    
+    if (selectAll.checked) {
+        checkboxes.forEach(cb => {
+            cb.checked = true;
+            selectedVps.add(parseInt(cb.dataset.vpsId));
+        });
+    } else {
+        checkboxes.forEach(cb => cb.checked = false);
+        selectedVps.clear();
+    }
+    
+    updateSelectedCount();
+}
+
+function toggleVpsSelection(vpsId) {
+    if (selectedVps.has(vpsId)) {
+        selectedVps.delete(vpsId);
+    } else {
+        selectedVps.add(vpsId);
+    }
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const count = selectedVps.size;
+    document.getElementById('selectedCount').textContent = `${count} selected`;
+    
+    const bulkButtons = ['bulkRenewBtn', 'bulkSuspendBtn', 'bulkDeleteBtn'];
+    bulkButtons.forEach(btnId => {
+        document.getElementById(btnId).disabled = count === 0;
+    });
+}
+
+function changeDaysFilter() {
+    selectedVps.clear();
+    updateSelectedCount();
+    loadVpsList();
+}
+
+function refreshList() {
+    loadVpsList();
+}
+
+function renewSingle(vpsId) {
+    selectedVps.clear();
+    selectedVps.add(vpsId);
+    bulkRenew();
+}
+
+function bulkRenew() {
+    if (selectedVps.size === 0) {
+        showToast('No Server selected', 'warning');
+        return;
+    }
+    
+    document.getElementById('renewVpsCount').textContent = selectedVps.size;
+    showModal('renewModal');
+}
+
+function setRenewDays(days) {
+    document.getElementById('renewDays').value = days;
+}
+
+async function confirmRenew() {
+    const days = parseInt(document.getElementById('renewDays').value);
+    
+    if (!days || days < 1 || days > 365) {
+        showToast('Please enter valid days (1-365)', 'warning');
+        return;
+    }
+    
+    hideModal('renewModal');
+    showLoading();
+    
+    let success = 0;
+    let failed = 0;
+    
+    for (const vpsId of selectedVps) {
+        try {
+            const response = await fetch(`/admin/vps/${vpsId}/renew`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ days: days })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                success++;
+            } else {
+                failed++;
+            }
+        } catch (err) {
+            failed++;
+        }
+    }
+    
+    hideLoading();
+    
+    if (success > 0) {
+        showToast(`Renewed ${success} Server successfully${failed > 0 ? `, ${failed} failed` : ''}`, success > failed ? 'success' : 'warning');
+        selectedVps.clear();
+        updateSelectedCount();
+        setTimeout(() => loadVpsList(), 1500);
+    } else {
+        showToast('Failed to renew Server', 'danger');
+    }
+}
+
+async function bulkSuspend() {
+    if (selectedVps.size === 0) return;
+    
+    if (!confirm(`Suspend ${selectedVps.size} Server?`)) return;
+    
+    showLoading();
+    let success = 0;
+    
+    for (const vpsId of selectedVps) {
+        try {
+            const response = await fetch(`/admin/vps/${vpsId}/suspend`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            
+            const result = await response.json();
+            if (result.success) success++;
+        } catch (err) {}
+    }
+    
+    hideLoading();
+    showToast(`Suspended ${success} Server`, 'success');
+    selectedVps.clear();
+    updateSelectedCount();
+    setTimeout(() => loadVpsList(), 1500);
+}
+
+async function bulkDelete() {
+    if (selectedVps.size === 0) return;
+    
+    if (!confirm(`DELETE ${selectedVps.size} Server? This action cannot be undone!`)) return;
+    if (!confirm('Are you absolutely sure? All data will be lost!')) return;
+    
+    showLoading();
+    let success = 0;
+    
+    for (const vpsId of selectedVps) {
+        try {
+            const response = await fetch(`/admin/vps/${vpsId}/delete`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            
+            const result = await response.json();
+            if (result.success) success++;
+        } catch (err) {}
+    }
+    
+    hideLoading();
+    showToast(`Deleted ${success} Server`, 'success');
+    selectedVps.clear();
+    updateSelectedCount();
+    setTimeout(() => loadVpsList(), 1500);
+}
+
+function exportList() {
+    if (vpsList.length === 0) {
+        showToast('No data to export', 'warning');
+        return;
+    }
+    
+    let csv = 'Server Name,Container,User,Email,Node,Status,Expires,Days Remaining\n';
+    
+    vpsList.forEach(vps => {
+        csv += `"${vps.hostname || vps.container_name}","${vps.container_name}","${vps.username}","${vps.email}","${vps.node_name}","${vps.status}","${vps.expires_at_formatted}","${vps.days_remaining}"\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expiring_vps_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showToast('Exported to CSV', 'success');
+}
+
+function showModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
+}
+
+function hideModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+    }
+}
+</script>
+{% endblock %}

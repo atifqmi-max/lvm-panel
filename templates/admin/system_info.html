@@ -1,0 +1,637 @@
+{% extends "base.html" %}
+
+{% block title %}System Information - {{ panel_name }}{% endblock %}
+
+{% block header_title %}System Information{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">System Info</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <h2 style="font-size: 1.25rem; margin: 0;">System Information</h2>
+    <button class="btn btn-outline" onclick="location.reload()">
+        <i class="fas fa-sync-alt"></i> Refresh
+    </button>
+</div>
+
+<!-- Quick Stats -->
+<div class="grid grid-4" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-microchip"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">CPU Usage</div>
+            <div class="stat-value">{{ (system_info.cpu_usage|default(0))|round(1) }}%</div>
+            <div class="stat-change">
+                <div class="progress" style="margin-top: 0.5rem;">
+                    {% set cpu_val = system_info.cpu_usage|default(0) %}
+                    <div class="progress-bar {% if cpu_val > 80 %}danger{% elif cpu_val > 60 %}warning{% else %}success{% endif %}" 
+                         style="width: {{ cpu_val }}%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-memory"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Memory Usage</div>
+            <div class="stat-value">{{ (system_info.memory.percent|default(0))|round(1) }}%</div>
+            <div class="stat-change">
+                <div class="progress" style="margin-top: 0.5rem;">
+                    {% set mem_val = system_info.memory.percent|default(0) %}
+                    <div class="progress-bar {% if mem_val > 80 %}danger{% elif mem_val > 60 %}warning{% else %}success{% endif %}" 
+                         style="width: {{ mem_val }}%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-hdd"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Disk Usage</div>
+            <div class="stat-value">
+                {% if system_info.disk.percent is number %}
+                    {{ system_info.disk.percent|round(1) }}%
+                {% else %}
+                    {{ system_info.disk.percent }}
+                {% endif %}
+            </div>
+            <div class="stat-change">
+                <div class="progress" style="margin-top: 0.5rem;">
+                    {% set disk_pct = system_info.disk.percent|string|replace('%', '')|float(0) %}
+                    <div class="progress-bar {% if disk_pct > 80 %}danger{% elif disk_pct > 60 %}warning{% else %}success{% endif %}" 
+                         style="width: {{ disk_pct }}%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon info">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Uptime</div>
+            <div class="stat-value" style="font-size: 1rem;">{{ system_info.uptime }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- System Details -->
+<div class="grid grid-2" style="margin-bottom: 1.5rem;">
+    <!-- Basic System Info -->
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div class="stat-icon primary" style="width: 48px; height: 48px;">
+                <i class="fas fa-server"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">System Details</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Host system information</p>
+            </div>
+        </div>
+        
+        <table style="width: 100%; font-size: 0.875rem;">
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted); width: 40%;">Hostname</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.hostname }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">System</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.system }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Release</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.release }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Machine</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.machine }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Processor</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.processor or 'Unknown' }}</td>
+            </tr>
+            {% if system_info.os_release %}
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">OS</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.os_release.PRETTY_NAME or system_info.os_release.NAME }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- CPU Information -->
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div class="stat-icon primary" style="width: 48px; height: 48px;">
+                <i class="fas fa-microchip"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">CPU Information</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Processor details</p>
+            </div>
+        </div>
+        
+        <table style="width: 100%; font-size: 0.875rem;">
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted); width: 40%;">CPU Cores</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.cpu_count }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Current Usage</td>
+                <td style="padding: 0.5rem 0;">
+                    {% set cpu_val = system_info.cpu_usage|default(0) %}
+                    <span class="badge {% if cpu_val > 80 %}danger{% elif cpu_val > 60 %}warning{% else %}success{% endif %}">
+                        {{ cpu_val|round(1) }}%
+                    </span>
+                </td>
+            </tr>
+            {% if system_info.cpu_details %}
+            {% if system_info.cpu_details.get('Model name') %}
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Model</td>
+                <td style="padding: 0.5rem 0; font-weight: 500; font-size: 0.8rem;">{{ system_info.cpu_details['Model name'] }}</td>
+            </tr>
+            {% endif %}
+            {% if system_info.cpu_details.get('Architecture') %}
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Architecture</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.cpu_details['Architecture'] }}</td>
+            </tr>
+            {% endif %}
+            {% if system_info.cpu_details.get('CPU MHz') %}
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Frequency</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.cpu_details['CPU MHz'] }} MHz</td>
+            </tr>
+            {% endif %}
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<!-- Memory & Storage -->
+<div class="grid grid-2" style="margin-bottom: 1.5rem;">
+    <!-- Memory Information -->
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div class="stat-icon success" style="width: 48px; height: 48px;">
+                <i class="fas fa-memory"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">Memory Information</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">RAM usage details</p>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.875rem; color: var(--text-muted);">RAM Usage</span>
+                <span style="font-size: 0.875rem; font-weight: 600;">{{ system_info.memory.used|default(0) }} MB / {{ system_info.memory.total|default(0) }} MB</span>
+            </div>
+            <div class="progress">
+                {% set mem_val = system_info.memory.percent|default(0) %}
+                <div class="progress-bar {% if mem_val > 80 %}danger{% elif mem_val > 60 %}warning{% else %}success{% endif %}" 
+                     style="width: {{ mem_val }}%;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
+                <span>{{ mem_val|round(1) }}% used</span>
+                <span>{{ system_info.memory.free|default(0) }} MB free</span>
+            </div>
+        </div>
+
+        {% if system_info.swap %}
+        <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.875rem; color: var(--text-muted);">Swap Usage</span>
+                <span style="font-size: 0.875rem; font-weight: 600;">{{ system_info.swap.used|default(0) }} MB / {{ system_info.swap.total|default(0) }} MB</span>
+            </div>
+            <div class="progress">
+                {% set swap_val = system_info.swap.percent|default(0) %}
+                <div class="progress-bar {% if swap_val > 80 %}danger{% elif swap_val > 60 %}warning{% else %}info{% endif %}" 
+                     style="width: {{ swap_val }}%;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
+                <span>{{ swap_val|round(1) }}% used</span>
+                <span>{{ system_info.swap.free|default(0) }} MB free</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Disk Information -->
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div class="stat-icon warning" style="width: 48px; height: 48px;">
+                <i class="fas fa-hdd"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">Disk Information</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Storage usage details</p>
+            </div>
+        </div>
+        
+        {% if system_info.disk_detailed %}
+        {% for path, usage in system_info.disk_detailed.items() %}
+        <div style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.875rem; color: var(--text-muted);">{{ path }}</span>
+                <span style="font-size: 0.875rem; font-weight: 600;">{{ usage.used|default(0) }} GB / {{ usage.total|default(0) }} GB</span>
+            </div>
+            <div class="progress">
+                {% set disk_val = usage.percent|default(0) %}
+                <div class="progress-bar {% if disk_val > 80 %}danger{% elif disk_val > 60 %}warning{% else %}success{% endif %}" 
+                     style="width: {{ disk_val }}%;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
+                <span>{{ disk_val|round(1) }}% used</span>
+                <span>{{ usage.free|default(0) }} GB free</span>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Software & Database -->
+<div class="grid grid-2" style="margin-bottom: 1.5rem;">
+    <!-- Software Versions -->
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div class="stat-icon info" style="width: 48px; height: 48px;">
+                <i class="fas fa-code"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">Software Versions</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Installed software</p>
+            </div>
+        </div>
+        
+        <table style="width: 100%; font-size: 0.875rem;">
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted); width: 40%;">Panel Version</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">
+                    <span class="badge success">{{ system_info.app.version }}</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Python</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.python_version }} ({{ system_info.python_implementation }})</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Flask</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.app.flask_version }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">LXD</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.lxd_version }}</td>
+            </tr>
+            {% if psutil_available %}
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">psutil</td>
+                <td style="padding: 0.5rem 0;"><span class="badge success"><i class="fas fa-check"></i> Installed</span></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">psutil</td>
+                <td style="padding: 0.5rem 0;"><span class="badge danger"><i class="fas fa-times"></i> Not Installed</span></td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Database Information -->
+    <div class="card">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div class="stat-icon info" style="width: 48px; height: 48px;">
+                <i class="fas fa-database"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">Database Information</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">SQLite database</p>
+            </div>
+        </div>
+        
+        <table style="width: 100%; font-size: 0.875rem;">
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted); width: 40%;">Database Size</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.database.size_mb }} MB</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Total Users</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.database.stats.users }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Total Server</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.database.stats.vps }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Total Nodes</td>
+                <td style="padding: 0.5rem 0; font-weight: 500;">{{ system_info.database.stats.nodes }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0; color: var(--text-muted);">Path</td>
+                <td style="padding: 0.5rem 0; font-family: monospace; font-size: 0.75rem; word-break: break-all;">{{ system_info.database.path }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+{% if system_info.process %}
+<!-- Process Information -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+        <div class="stat-icon primary" style="width: 48px; height: 48px;">
+            <i class="fas fa-cog"></i>
+        </div>
+        <div>
+            <h3 style="margin: 0; font-size: 1.1rem;">Process Information</h3>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Current application process</p>
+        </div>
+    </div>
+    
+    <div class="grid grid-4">
+        <div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Process ID</div>
+            <div style="font-weight: 600;">{{ system_info.process.pid|default('N/A') }}</div>
+        </div>
+        <div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Memory Usage</div>
+            <div style="font-weight: 600;">{{ system_info.process.memory_mb|default(0) }} MB</div>
+        </div>
+        <div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">CPU Usage</div>
+            <div style="font-weight: 600;">{{ (system_info.process.cpu_percent|default(0))|round(1) }}%</div>
+        </div>
+        <div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Threads</div>
+            <div style="font-weight: 600;">{{ system_info.process.threads|default(0) }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if system_info.partitions %}
+<!-- Disk Partitions -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+        <div class="stat-icon warning" style="width: 48px; height: 48px;">
+            <i class="fas fa-hard-drive"></i>
+        </div>
+        <div>
+            <h3 style="margin: 0; font-size: 1.1rem;">Disk Partitions</h3>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">All mounted partitions</p>
+        </div>
+    </div>
+    
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; font-size: 0.875rem;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left; color: var(--text-muted); font-weight: 600;">Device</th>
+                    <th style="padding: 0.75rem; text-align: left; color: var(--text-muted); font-weight: 600;">Mount Point</th>
+                    <th style="padding: 0.75rem; text-align: left; color: var(--text-muted); font-weight: 600;">Type</th>
+                    <th style="padding: 0.75rem; text-align: right; color: var(--text-muted); font-weight: 600;">Size</th>
+                    <th style="padding: 0.75rem; text-align: right; color: var(--text-muted); font-weight: 600;">Used</th>
+                    <th style="padding: 0.75rem; text-align: right; color: var(--text-muted); font-weight: 600;">Free</th>
+                    <th style="padding: 0.75rem; text-align: left; color: var(--text-muted); font-weight: 600;">Usage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for partition in system_info.partitions %}
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 0.75rem; font-family: monospace; font-size: 0.8rem;">{{ partition.device }}</td>
+                    <td style="padding: 0.75rem; font-weight: 500;">{{ partition.mountpoint }}</td>
+                    <td style="padding: 0.75rem;"><span class="badge">{{ partition.fstype }}</span></td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ partition.total|default(0) }} GB</td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ partition.used|default(0) }} GB</td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ partition.free|default(0) }} GB</td>
+                    <td style="padding: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="progress" style="flex: 1; min-width: 100px;">
+                                {% set part_val = partition.percent|default(0) %}
+                                <div class="progress-bar {% if part_val > 80 %}danger{% elif part_val > 60 %}warning{% else %}success{% endif %}" 
+                                     style="width: {{ part_val }}%;"></div>
+                            </div>
+                            <span style="min-width: 45px; text-align: right;">{{ part_val|round(1) }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if system_info.network_interfaces %}
+<!-- Network Interfaces -->
+<div class="card">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+        <div class="stat-icon info" style="width: 48px; height: 48px;">
+            <i class="fas fa-network-wired"></i>
+        </div>
+        <div>
+            <h3 style="margin: 0; font-size: 1.1rem;">Network Interfaces</h3>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Network configuration</p>
+        </div>
+    </div>
+    
+    {% for interface, addrs in system_info.network_interfaces.items() %}
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--accent-primary);">
+            <i class="fas fa-ethernet"></i> {{ interface }}
+        </h4>
+        {% for addr in addrs %}
+        <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: var(--border-radius-sm); font-size: 0.875rem;">
+            <div style="display: grid; grid-template-columns: 100px 1fr; gap: 0.5rem;">
+                <span style="color: var(--text-muted);">Address:</span>
+                <span style="font-family: monospace; font-weight: 500;">{{ addr.address }}</span>
+                {% if addr.netmask %}
+                <span style="color: var(--text-muted);">Netmask:</span>
+                <span style="font-family: monospace;">{{ addr.netmask }}</span>
+                {% endif %}
+                {% if addr.broadcast %}
+                <span style="color: var(--text-muted);">Broadcast:</span>
+                <span style="font-family: monospace;">{{ addr.broadcast }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if system_info.environment %}
+<!-- Environment Variables -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="stat-icon success" style="width: 48px; height: 48px;">
+                <i class="fas fa-cogs"></i>
+            </div>
+            <div>
+                <h3 style="margin: 0; font-size: 1.1rem;">Environment Variables</h3>
+                <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Application configuration</p>
+            </div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="toggleEnvVars()">
+            <i class="fas fa-eye" id="envToggleIcon"></i>
+            <span id="envToggleText">Show All</span>
+        </button>
+    </div>
+    
+    <!-- Panel Configuration -->
+    <div style="margin-bottom: 1.5rem;">
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--accent-primary);">
+            <i class="fas fa-sliders-h"></i> Panel Configuration
+        </h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.75rem;">
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Panel Name</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.PANEL_NAME }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Panel Version</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.PANEL_VERSION }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Developer</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.PANEL_DEVELOPER }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Host</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.HOST }}:{{ system_info.environment.PORT }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Debug Mode</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">
+                    {% if system_info.environment.DEBUG_MODE == 'True' %}
+                    <span class="badge warning">Enabled</span>
+                    {% else %}
+                    <span class="badge success">Disabled</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Server IP</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.YOUR_SERVER_IP }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- System Configuration -->
+    <div style="margin-bottom: 1.5rem;">
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--accent-primary);">
+            <i class="fas fa-server"></i> System Configuration
+        </h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.75rem;">
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Database Path</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem; word-break: break-all;">{{ system_info.environment.DATABASE_PATH }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Storage Pool</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.DEFAULT_STORAGE_POOL }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Backup Interval</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.AUTO_BACKUP_INTERVAL }}s</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Stats Update Interval</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.STATS_UPDATE_INTERVAL }}s</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Current Directory</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.75rem; word-break: break-all;">{{ system_info.environment.CURRENT_DIRECTORY }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Python Executable</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.75rem; word-break: break-all;">{{ system_info.environment.PYTHON_EXECUTABLE }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Additional Environment Variables (Hidden by default) -->
+    <div id="additionalEnvVars" style="display: none;">
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--accent-primary);">
+            <i class="fas fa-list"></i> System Environment
+        </h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.75rem;">
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Python Version</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.PYTHON_VERSION }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Home Directory</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem; word-break: break-all;">{{ system_info.environment.HOME }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">User</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.USER }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Shell</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.SHELL }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Language</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.LANG }}</div>
+            </div>
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Timezone</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.875rem;">{{ system_info.environment.TZ }}</div>
+            </div>
+            {% if system_info.environment.PYTHONPATH != 'Not set' %}
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); grid-column: 1 / -1;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Python Path</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.75rem; word-break: break-all;">{{ system_info.environment.PYTHONPATH }}</div>
+            </div>
+            {% endif %}
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); grid-column: 1 / -1;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">System Path</div>
+                <div style="font-weight: 600; font-family: monospace; font-size: 0.75rem; word-break: break-all;">{{ system_info.environment.PATH }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleEnvVars() {
+    const additionalVars = document.getElementById('additionalEnvVars');
+    const icon = document.getElementById('envToggleIcon');
+    const text = document.getElementById('envToggleText');
+    
+    if (additionalVars.style.display === 'none') {
+        additionalVars.style.display = 'block';
+        icon.className = 'fas fa-eye-slash';
+        text.textContent = 'Hide All';
+    } else {
+        additionalVars.style.display = 'none';
+        icon.className = 'fas fa-eye';
+        text.textContent = 'Show All';
+    }
+}
+</script>
+{% endif %}
+
+{% endblock %}

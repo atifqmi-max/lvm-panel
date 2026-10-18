@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Server Expiration: {{ vps.hostname or vps.container_name }} - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Server Expiration Settings{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_vps') }}" class="breadcrumb-item">Server</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_vps_edit', vps_id=vps.id) }}" class="breadcrumb-item">{{ vps.hostname or vps.container_name }}</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Expiration</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Server Header -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">
+                <i class="fas fa-server"></i>
+                {{ vps.hostname or vps.container_name }}
+            </h2>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                <span class="badge badge-info">{{ vps.container_name }}</span>
+                <span class="badge {% if vps.suspended %}badge-danger{% else %}badge-success{% endif %}">
+                    {% if vps.suspended %}Suspended{% else %}Active{% endif %}
+                </span>
+                <span style="color: var(--text-muted); font-size: 0.875rem;">
+                    <i class="fas fa-user"></i> {{ user.username }}
+                </span>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <a href="{{ url_for('admin_vps_edit', vps_id=vps.id) }}" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i> Back to Server
+            </a>
+            <a href="{{ url_for('admin_vps') }}" class="btn btn-outline">
+                <i class="fas fa-list"></i> All Server
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Current Status -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-info-circle"></i>
+            Current Expiration Status
+        </h3>
+    </div>
+    
+    <div id="statusDisplay">
+        {% if expires_info.auto_suspend_enabled and expires_info.expires_at %}
+            {% if expires_info.is_expired %}
+                <div class="alert alert-danger" style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="font-size: 3rem;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">Server Has Expired</h3>
+                        <p style="margin: 0; color: var(--text-muted);">
+                            This Server expired on {{ expires_info.expires_at_formatted }}
+                        </p>
+                    </div>
+                </div>
+            {% elif expires_info.days_remaining <= 3 %}
+                <div class="alert alert-warning" style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="font-size: 3rem;">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">Expiring Soon</h3>
+                        <p style="margin: 0; color: var(--text-muted);">
+                            {% if expires_info.days_remaining == 0 %}
+                                Expires in {{ expires_info.hours_remaining }} hours ({{ expires_info.expires_at_formatted }})
+                            {% else %}
+                                Expires in {{ expires_info.days_remaining }} days ({{ expires_info.expires_at_formatted }})
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-info" style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="font-size: 3rem;">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">Active with Expiration</h3>
+                        <p style="margin: 0; color: var(--text-muted);">
+                            Expires in {{ expires_info.days_remaining }} days ({{ expires_info.expires_at_formatted }})
+                        </p>
+                    </div>
+                </div>
+            {% endif %}
+            
+            <div class="grid grid-3" style="margin-top: 1.5rem;">
+                <div style="padding: 1rem; background-color: var(--bg-secondary); border-radius: var(--border-radius-sm); text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent-primary);">
+                        {{ expires_info.days_remaining }}
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">Days Remaining</div>
+                </div>
+                
+                <div style="padding: 1rem; background-color: var(--bg-secondary); border-radius: var(--border-radius-sm); text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent-success);">
+                        {{ expires_info.renewal_count }}
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">Times Renewed</div>
+                </div>
+                
+                <div style="padding: 1rem; background-color: var(--bg-secondary); border-radius: var(--border-radius-sm); text-align: center;">
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent-info);">
+                        {{ expires_info.expiration_days }}
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">Day Period</div>
+                </div>
+            </div>
+            
+            {% if expires_info.last_renewed_at %}
+            <div style="margin-top: 1rem; padding: 0.75rem; background-color: var(--bg-tertiary); border-radius: var(--border-radius-sm); text-align: center;">
+                <i class="fas fa-history"></i>
+                Last renewed: {{ expires_info.last_renewed_at|relative_time }}
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-success" style="display: flex; align-items: center; gap: 1rem;">
+                <div style="font-size: 3rem;">
+                    <i class="fas fa-infinity"></i>
+                </div>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">No Expiration Set</h3>
+                    <p style="margin: 0; color: var(--text-muted);">
+                        This Server does not have auto-expiration enabled
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-2" style="margin-bottom: 1.5rem;">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-redo"></i>
+                Quick Renew
+            </h3>
+        </div>
+        
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            Extend the Server expiration by adding more days to the current expiration date.
+        </p>
+        
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-success" onclick="quickRenew(7)">
+                <i class="fas fa-plus"></i> +7 Days
+            </button>
+            <button class="btn btn-success" onclick="quickRenew(15)">
+                <i class="fas fa-plus"></i> +15 Days
+            </button>
+            <button class="btn btn-success" onclick="quickRenew(30)">
+                <i class="fas fa-plus"></i> +30 Days
+            </button>
+            <button class="btn btn-success" onclick="quickRenew(90)">
+                <i class="fas fa-plus"></i> +90 Days
+            </button>
+        </div>
+        
+        <div style="margin-top: 1rem;">
+            <label class="form-label">Custom Days</label>
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="number" id="customDays" class="form-control" placeholder="Enter days" min="1" max="365" style="flex: 1;">
+                <button class="btn btn-primary" onclick="customRenew()">
+                    <i class="fas fa-redo"></i> Renew
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-ban"></i>
+                Disable Expiration
+            </h3>
+        </div>
+        
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            Remove the expiration date and disable auto-suspend for this Server.
+        </p>
+        
+        <button class="btn btn-warning" onclick="disableExpiration()">
+            <i class="fas fa-infinity"></i> Disable Auto-Expiration
+        </button>
+    </div>
+</div>
+
+<!-- Configure Expiration -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-cog"></i>
+            Configure Expiration Settings
+        </h3>
+    </div>
+    
+    <form id="expirationForm">
+        <div class="form-group">
+            <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="autoSuspendEnabled" {% if expires_info.auto_suspend_enabled %}checked{% endif %} style="width: auto; margin: 0;">
+                Enable Auto-Expiration
+            </label>
+            <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                When enabled, the Server will automatically suspend after the expiration period
+            </small>
+        </div>
+        
+        <div id="expirationSettings" style="{% if not expires_info.auto_suspend_enabled %}display: none;{% endif %}">
+            <div class="form-group">
+                <label class="form-label">Expiration Period (Days)</label>
+                <input type="number" id="expirationDays" class="form-control" value="{{ expires_info.expiration_days }}" min="1" max="365">
+                <small style="color: var(--text-muted);">
+                    Number of days from now until the Server expires (1-365 days)
+                </small>
+            </div>
+            
+            <div id="expirationPreview" style="padding: 1rem; background-color: var(--bg-secondary); border-radius: var(--border-radius-sm); margin-top: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <i class="fas fa-calendar"></i>
+                    <strong>New Expiration Date:</strong>
+                </div>
+                <div id="previewDate" style="font-size: 1.125rem; color: var(--accent-primary);"></div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+            <a href="{{ url_for('admin_vps_edit', vps_id=vps.id) }}" class="btn btn-outline">
+                <i class="fas fa-times"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const vpsId = {{ vps.id }};
+    
+    // Toggle expiration settings visibility
+    document.getElementById('autoSuspendEnabled').addEventListener('change', function() {
+        const settings = document.getElementById('expirationSettings');
+        if (this.checked) {
+            settings.style.display = 'block';
+            updatePreview();
+        } else {
+            settings.style.display = 'none';
+        }
+    });
+    
+    // Update preview when days change
+    document.getElementById('expirationDays').addEventListener('input', updatePreview);
+    
+    function updatePreview() {
+        const days = parseInt(document.getElementById('expirationDays').value) || 0;
+        const previewDate = document.getElementById('previewDate');
+        
+        if (days > 0) {
+            const expirationDate = new Date();
+            expirationDate.setDate(expirationDate.getDate() + days);
+            previewDate.textContent = expirationDate.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else {
+            previewDate.textContent = 'Invalid date';
+        }
+    }
+    
+    // Initialize preview
+    if (document.getElementById('autoSuspendEnabled').checked) {
+        updatePreview();
+    }
+    
+    // Form submission
+    document.getElementById('expirationForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const autoSuspendEnabled = document.getElementById('autoSuspendEnabled').checked;
+        const expirationDays = parseInt(document.getElementById('expirationDays').value) || 0;
+        
+        if (autoSuspendEnabled && (expirationDays < 1 || expirationDays > 365)) {
+            showToast('Expiration days must be between 1 and 365', 'warning');
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await fetch(`/admin/vps/${vpsId}/expiration`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    auto_suspend_enabled: autoSuspendEnabled,
+                    expiration_days: autoSuspendEnabled ? expirationDays : 0
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showToast('Expiration settings updated successfully', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Failed to update settings', 'danger');
+            }
+        } catch (error) {
+            console.error('Update error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    });
+    
+    // Quick renew
+    async function quickRenew(days) {
+        if (!confirm(`Renew this Server for ${days} more days?`)) {
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await fetch(`/admin/vps/${vpsId}/renew`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ days: days })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showToast(`Server renewed for ${days} days`, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Failed to renew Server', 'danger');
+            }
+        } catch (error) {
+            console.error('Renew error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    // Custom renew
+    async function customRenew() {
+        const days = parseInt(document.getElementById('customDays').value);
+        
+        if (!days || days < 1 || days > 365) {
+            showToast('Please enter a valid number of days (1-365)', 'warning');
+            return;
+        }
+        
+        await quickRenew(days);
+    }
+    
+    // Disable expiration
+    async function disableExpiration() {
+        if (!confirm('Disable auto-expiration for this Server?\n\nThe Server will no longer have an expiration date and will not be automatically suspended.')) {
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await fetch(`/admin/vps/${vpsId}/expiration`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    auto_suspend_enabled: false,
+                    expiration_days: 0
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showToast('Auto-expiration disabled', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(result.error || 'Failed to disable expiration', 'danger');
+            }
+        } catch (error) {
+            console.error('Disable error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+</script>
+{% endblock %}

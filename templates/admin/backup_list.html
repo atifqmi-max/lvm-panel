@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Backups - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Database Backups{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-item">Admin</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <a href="{{ url_for('admin_maintenance') }}" class="breadcrumb-item">Maintenance</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Backups</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header Actions -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <h2 style="font-size: 1.25rem;">Database Backups</h2>
+    <form action="{{ url_for('admin_backup') }}" method="POST">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create New Backup
+        </button>
+    </form>
+</div>
+
+<!-- Backups List -->
+<div class="card">
+    {% if backups %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Backup File</th>
+                    <th>Size</th>
+                    <th>Modified</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in backups %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-database" style="color: var(--accent-primary);"></i>
+                            <code>{{ backup.name }}</code>
+                        </div>
+                    </td>
+                    <td>{{ backup.size|format_bytes }}</td>
+                    <td>{{ backup.modified|relative_time }}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="{{ url_for('admin_backup_download', filename=backup.name) }}" class="btn btn-sm btn-outline" data-tooltip="Download">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <button class="btn btn-sm btn-warning" onclick="restoreBackup('{{ backup.name }}')" data-tooltip="Restore">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteBackup('{{ backup.name }}')" data-tooltip="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-database"></i>
+        <h3>No Backups</h3>
+        <p>No database backups have been created yet.</p>
+        <form action="{{ url_for('admin_backup') }}" method="POST">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Create First Backup
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Restore Warning -->
+<div class="alert alert-warning" style="margin-top: 1.5rem;">
+    <i class="fas fa-exclamation-triangle"></i>
+    <div>
+        <strong>Warning:</strong> Restoring a backup will overwrite the current database. All changes made after the backup date will be lost.
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Restore backup
+    function restoreBackup(filename) {
+        if (!confirm(`WARNING: This will overwrite the current database with ${filename}. All changes after this backup will be lost. Are you absolutely sure?`)) {
+            return;
+        }
+
+        showLoading();
+
+        fetch(`/admin/backup/restore/${filename}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Backup restored successfully', 'success');
+                setTimeout(() => window.location.href = "{{ url_for('admin_dashboard') }}", 2000);
+            } else {
+                showToast(data.error || 'Failed to restore backup', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Restore error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            hideLoading();
+        });
+    }
+
+    // Delete backup
+    function deleteBackup(filename) {
+        if (!confirm(`Delete backup ${filename}?`)) {
+            return;
+        }
+
+        showLoading();
+
+        fetch(`/admin/backup/delete/${filename}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Backup deleted successfully', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(data.error || 'Failed to delete backup', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Delete error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            hideLoading();
+        });
+    }
+</script>
+{% endblock %}

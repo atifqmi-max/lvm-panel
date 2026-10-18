@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Port Forwarding - {{ panel_name }}{% endblock %}
+
+{% block header_title %}Port Forwarding{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumb">
+    <a href="{{ url_for('dashboard') }}" class="breadcrumb-item">Dashboard</a>
+    <span class="breadcrumb-separator"><i class="fas fa-chevron-right"></i></span>
+    <span class="breadcrumb-item active">Port Forwarding</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Port Quota Stats -->
+<div class="grid grid-3" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-chart-pie"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Allocated Ports</div>
+            <div class="stat-value">{{ allocated }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Used Ports</div>
+            <div class="stat-value">{{ used }}</div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon {% if available > 0 %}warning{% else %}danger{% endif %}">
+            <i class="fas fa-{% if available > 0 %}arrow-up{% else %}exclamation-circle{% endif %}"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-label">Available Ports</div>
+            <div class="stat-value">{{ available }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Port Forward (if available slots) -->
+{% if available > 0 and vps_list %}
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-plus-circle"></i>
+            Add New Port Forward
+        </h3>
+    </div>
+    
+    <form onsubmit="addPortForward(event)">
+        <div class="grid grid-2" style="align-items: end;">
+            <div class="form-group">
+                <label class="form-label">Select Server</label>
+                <select class="form-control" id="portServer" required>
+                    <option value="">Choose a Server...</option>
+                    {% for vps in vps_list %}
+                    <option value="{{ vps.id }}">{{ vps.hostname or vps.container_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Server Port</label>
+                <input type="number" class="form-control" id="portNumber" min="1" max="65535" placeholder="e.g., 80, 443, 22" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Protocol</label>
+                <select class="form-control" id="portProtocol">
+                    <option value="tcp,udp">TCP + UDP</option>
+                    <option value="tcp">TCP Only</option>
+                    <option value="udp">UDP Only</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Description (optional)</label>
+                <input type="text" class="form-control" id="portDescription" placeholder="e.g., Web Server">
+            </div>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-plug"></i> Add Port Forward
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<!-- Port Forwards List -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-list"></i>
+            Active Port Forwards
+        </h3>
+    </div>
+
+    {% if forwards %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Server Port</th>
+                    <th>Public Address</th>
+                    <th>Protocol</th>
+                    <th>Description</th>
+                    <th>Hits</th>
+                    <th>Last Used</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for forward in forwards %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="user-avatar" style="width: 24px; height: 24px; background-color: var(--accent-primary);">
+                                <i class="fas fa-server" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <span>{{ forward.vps_container }}</span>
+                        </div>
+                    </td>
+                    <td><span class="badge badge-info">{{ forward.vps_port }}</span></td>
+                    <td>
+                        <code style="background: var(--bg-tertiary); padding: 0.25rem 0.5rem; border-radius: 4px;">
+                            {{ forward.display_ip }}:{{ forward.host_port }}
+                        </code>
+                        <button class="btn btn-sm btn-outline" onclick="copyToClipboard('{{ forward.display_ip }}:{{ forward.host_port }}')" style="margin-left: 0.5rem;">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </td>
+                    <td>{{ forward.protocol }}</td>
+                    <td>{{ forward.description or '-' }}</td>
+                    <td>{{ forward.hits }}</td>
+                    <td>{{ forward.last_used|relative_time if forward.last_used != forward.created_at else 'Never' }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="removePort({{ forward.id }})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-plug"></i>
+        <h3>No Port Forwards</h3>
+        <p>You haven't set up any port forwarding rules yet.</p>
+        {% if available > 0 and vps_list %}
+        <p>Use the form above to add your first port forward.</p>
+        {% elif available == 0 %}
+        <p>You have used all your allocated ports. Contact an administrator to increase your quota.</p>
+        {% else %}
+        <p>Create a Server first to add port forwards.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add port forward
+    async function addPortForward(event) {
+        event.preventDefault();
+        
+        const vpsId = document.getElementById('portServer').value;
+        const vpsPort = document.getElementById('portNumber').value;
+        const protocol = document.getElementById('portProtocol').value;
+        const description = document.getElementById('portDescription').value;
+
+        if (!vpsId) {
+            showToast('Please select a Server', 'warning');
+            return;
+        }
+
+        if (!vpsPort || vpsPort < 1 || vpsPort > 65535) {
+            showToast('Please enter a valid port number (1-65535)', 'warning');
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch('/ports/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    vps_id: parseInt(vpsId),
+                    vps_port: parseInt(vpsPort),
+                    protocol: protocol,
+                    description: description
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(result.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Add port error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Remove port forward
+    async function removePort(forwardId) {
+        if (!confirm('Are you sure you want to remove this port forward?')) {
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch(`/ports/remove/${forwardId}`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Port forward removed successfully', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(result.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Remove port error:', error);
+            showToast('Network error: ' + error.message, 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Copy to clipboard
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Copied to clipboard', 'success');
+        }).catch(() => {
+            showToast('Failed to copy', 'danger');
+        });
+    }
+</script>
+{% endblock %}
