@@ -4073,6 +4073,45 @@ def vps_detail(vps_id):
 # VPS File Manager Routes - SFTP Based
 # ============================================================================
 
+def configure_vps_ssh_host_key(ssh_client, vps, hostname, port):
+    """Pin the VPS SSH host key obtained over the authenticated LXD management channel."""
+    import paramiko
+
+    if not hostname or any(ch.isspace() or ord(ch) < 32 for ch in hostname):
+        raise ValueError("Invalid SSH hostname")
+    port = int(port)
+    if not 1 <= port <= 65535:
+        raise ValueError("Invalid SSH port")
+
+    container_name = str(vps.get("container_name") or "")
+    node_id = vps.get("node_id")
+    if not container_name or node_id is None:
+        raise RuntimeError("VPS container identity is unavailable")
+
+    script = 'for f in /etc/ssh/ssh_host_*_key.pub; do [ -r "$f" ] && cat "$f"; done'
+    command = f"exec {shlex.quote(container_name)} -- sh -lc {shlex.quote(script)}"
+    public_keys = run_sync(execute_container(container_name, command, timeout=15, node_id=node_id))
+    known_host = hostname if port == 22 else f"[{hostname}]:{port}"
+    host_keys = ssh_client.get_host_keys()
+    added = 0
+
+    for line in str(public_keys or "").splitlines():
+        parts = line.strip().split()
+        if len(parts) < 2:
+            continue
+        try:
+            entry = paramiko.hostkeys.HostKeyEntry.from_line(f"{known_host} {parts[0]} {parts[1]}")
+        except Exception:
+            entry = None
+        if entry and entry.key:
+            host_keys.add(known_host, entry.key.get_name(), entry.key)
+            added += 1
+
+    if not added:
+        raise RuntimeError("Could not verify VPS SSH host key through LXD")
+    ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy())
+
+
 def get_sftp_connection(vps):
     """Create SFTP connection to VPS"""
     import paramiko
@@ -4093,8 +4132,8 @@ def get_sftp_connection(vps):
         if private_ip and private_ip != "N/A":
             # Try direct connection to private IP
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             try:
+                configure_vps_ssh_host_key(ssh, vps, private_ip, 22)
                 ssh.connect(
                     hostname=private_ip,
                     port=22,
@@ -4149,9 +4188,10 @@ def get_sftp_connection(vps):
 
     # Create SSH client
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
+        # Pin the key read from the VPS over the authenticated LXD management channel.
+        configure_vps_ssh_host_key(ssh, vps, node_host, ssh_port)
         # Connect with root:root credentials via port forward
         ssh.connect(
             hostname=node_host,
@@ -4713,13 +4753,13 @@ if socketio and SSH_AVAILABLE:
             try:
                 # Create SSH client
                 ssh_client = paramiko.SSHClient()
-                ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-                # Connect to SSH
+                # Connect only after pinning the expected host key from the VPS itself.
                 try:
                     port = int(port)
-                except:
+                except (TypeError, ValueError):
                     port = 22
+                configure_vps_ssh_host_key(ssh_client, vps, host, port)
                 
                 logger.info(f"Connecting to SSH: {username}@{host}:{port}")
                 ssh_client.connect(
