@@ -301,7 +301,7 @@
                 <label class="form-label">Password</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="fa-solid fa-lock"></i></span>
-                    <input type="password" class="form-control" id="sshPass" placeholder="••••••••">
+                    <input type="password" class="form-control" id="sshPass" value="{{ vps.ssh_password or '' }}" placeholder="SSH password (generated for this VPS)" autocomplete="current-password">
                 </div>
             </div>
             <button class="btn btn-connect btn-primary" id="connectBtn">
