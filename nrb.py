@@ -813,7 +813,7 @@ def main_admin_required(f):
 def api_key_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key') or request.headers.get('X-API-Key')
+        api_key = request.headers.get('X-API-Key')
         if not api_key:
             return jsonify({'error': 'API key required'}), 401
         
@@ -4138,8 +4138,9 @@ def configure_vps_ssh_host_key(ssh_client, vps, hostname, port):
 
 
 def get_sftp_connection(vps):
-    """Create SFTP connection to VPS"""
+    """Create SFTP connection to VPS using its unique generated credential."""
     import paramiko
+    ssh_password = get_or_rotate_vps_ssh_password(vps)
 
     # Get node to find the actual host
     node = get_node(vps['node_id'])
@@ -4163,7 +4164,7 @@ def get_sftp_connection(vps):
                     hostname=private_ip,
                     port=22,
                     username='root',
-                    password='root',
+                    password=ssh_password,
                     timeout=5,
                     allow_agent=False,
                     look_for_keys=False
@@ -4222,7 +4223,7 @@ def get_sftp_connection(vps):
             hostname=node_host,
             port=ssh_port,
             username='root',
-            password='root',
+            password=ssh_password,
             timeout=10,
             allow_agent=False,
             look_for_keys=False
@@ -4718,6 +4719,13 @@ def vps_console(vps_id):
 
     # Get VPS IP address
     vps_ip = vps.get('ip_address', '')
+    ssh_password = decrypt_vps_ssh_password((vps.get('metadata') or {}).get('ssh_password_encrypted'))
+    if not ssh_password and vps.get('status') == 'running':
+        try:
+            ssh_password = get_or_rotate_vps_ssh_password(vps)
+        except Exception as exc:
+            logger.warning("Could not provision SSH credentials for VPS %s: %s", vps_id, exc)
+    vps['ssh_password'] = ssh_password or ''
     
     return render_template(
         'console.html',
@@ -5073,10 +5081,13 @@ def vps_reinstall(vps_id):
             logger.info(f"IP address {vps['ip_address']} configured for {container_name}")
         
         # SSH is best-effort; a temporary package mirror failure must not delete the VPS.
-        ssh_ready = run_sync(configure_ssh_and_root_password(container_name, node_id))
-        logger.info(f"SSH setup result for {container_name}: {ssh_ready}")
-        tailscale_info = run_sync(configure_tailscale(container_name, node_id))
         existing_meta = vps.get('metadata') or {}
+        current_ssh_password = decrypt_vps_ssh_password(existing_meta.get('ssh_password_encrypted'))
+        ssh_ready = run_sync(configure_ssh_and_root_password(container_name, node_id, current_ssh_password))
+        logger.info(f"SSH setup result for {container_name}: {'ready' if ssh_ready else 'pending'}")
+        if ssh_ready:
+            existing_meta['ssh_password_encrypted'] = encrypt_vps_ssh_password(ssh_ready)
+        tailscale_info = run_sync(configure_tailscale(container_name, node_id))
         existing_meta['tailscale'] = tailscale_info
         update_vps(vps_id, metadata=existing_meta)
         logger.info(f"Tailscale setup result for {container_name}: {tailscale_info}")
@@ -6655,7 +6666,7 @@ def admin_vps_create():
             run_sync(configure_container_ip(container_name, ip_address, node_id))
         
         ssh_ready = run_sync(configure_ssh_and_root_password(container_name, node_id))
-        logger.info(f"SSH setup result for {container_name}: {ssh_ready}")
+        logger.info(f"SSH setup result for {container_name}: {'ready' if ssh_ready else 'pending'}")
         
         config_str = f"{ram}GB RAM / {cpu} CPU / {disk}GB Disk"
         vps_id = create_vps(
@@ -6675,7 +6686,10 @@ def admin_vps_create():
         )
 
         tailscale_info = run_sync(configure_tailscale(container_name, node_id))
-        update_vps(vps_id, metadata={'tailscale': tailscale_info})
+        metadata = {'tailscale': tailscale_info}
+        if ssh_ready:
+            metadata['ssh_password_encrypted'] = encrypt_vps_ssh_password(ssh_ready)
+        update_vps(vps_id, metadata=metadata)
         logger.info(f"Tailscale setup for {container_name}: {tailscale_info}")
         
         log_activity(current_user.id, 'admin_create_vps', 'vps', str(vps_id),
