@@ -981,7 +981,7 @@ def api_bulk_start_vps():
                         run_sync(execute_container(vps['container_name'], f"start {vps['container_name']}", node_id=vps['node_id']))
                         started.append(vps_id)
                     except Exception as e:
-                        failed.append({'vps_id': vps_id, 'error': str(e)})
+                        failed.append({'vps_id': vps_id, 'error': 'Operation failed'})
         
         return jsonify({
             'success': True,
@@ -1020,7 +1020,7 @@ def api_bulk_stop_vps():
                         run_sync(execute_container(vps['container_name'], f"stop {vps['container_name']}", node_id=vps['node_id']))
                         stopped.append(vps_id)
                     except Exception as e:
-                        failed.append({'vps_id': vps_id, 'error': str(e)})
+                        failed.append({'vps_id': vps_id, 'error': 'Operation failed'})
         
         return jsonify({
             'success': True,
