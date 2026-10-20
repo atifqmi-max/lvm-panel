@@ -10,6 +10,8 @@ import secrets
 import hashlib
 from datetime import datetime
 import logging
+import ipaddress
+import re
 
 # Create API blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -350,36 +352,160 @@ def api_get_vps(vps_id):
         logger.error(f"API get VPS error: {e}")
         return jsonify({'success': False, 'error': 'Request failed'}), 500
 
+def _parse_resource_amount(value, field):
+    """Parse a positive integer resource amount, accepting values such as 2 or '2GB'."""
+    if isinstance(value, bool) or value is None:
+        raise ValueError(f"{field} must be a positive whole number")
+    match = re.fullmatch(r"\s*(\d+)\s*(?:GB|G)?\s*", str(value), flags=re.IGNORECASE)
+    if not match:
+        raise ValueError(f"{field} must be a positive whole number")
+    amount = int(match.group(1))
+    if amount < 1:
+        raise ValueError(f"{field} must be a positive whole number")
+    return amount
+
+
 @api_bp.route('/vps', methods=['POST'])
 @require_admin_api
 def api_create_vps():
-    """Create new VPS"""
-    from nrb import get_db, run_sync, execute_container, apply_lxd_config, configure_container_ip, apply_internal_permissions
-    
+    """Create a real LXD-backed VPS using the same backend as the admin panel."""
+    from nrb import (
+        OS_OPTIONS, get_db, get_node, get_current_vps_count, get_vps_for_user,
+        get_setting, run_sync, execute_container, apply_lxd_config,
+        configure_container_ip, configure_ssh_and_root_password,
+        configure_tailscale, create_vps, update_vps, delete_vps,
+        encrypt_vps_ssh_password, log_activity,
+    )
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': 'A JSON object is required'}), 400
+
     try:
-        data = request.get_json()
-        
-        # Required fields
-        required = ['hostname', 'user_id', 'node_id', 'os_version', 'cpu', 'ram', 'storage']
-        for field in required:
-            if field not in data:
-                return jsonify({
-                    'success': False,
-                    'error': f'Missing required field: {field}',
-                    'required': required
-                }), 400
-        
-        # Create VPS logic here (simplified)
-        # This would call the actual VPS creation functions from nrb.py
-        
+        user_id = int(data.get('user_id', 0))
+        node_id = int(data.get('node_id', 0))
+        cpu = _parse_resource_amount(data.get('cpu'), 'CPU')
+        ram = _parse_resource_amount(data.get('ram'), 'RAM')
+        disk = _parse_resource_amount(data.get('storage'), 'Storage')
+    except (TypeError, ValueError) as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+    if user_id < 1 or node_id < 1:
+        return jsonify({'success': False, 'error': 'Valid user_id and node_id are required'}), 400
+    if not 1 <= cpu <= 64:
+        return jsonify({'success': False, 'error': 'CPU must be between 1 and 64 cores'}), 400
+    if not 1 <= ram <= 128:
+        return jsonify({'success': False, 'error': 'RAM must be between 1 and 128 GB'}), 400
+    if not 5 <= disk <= 2000:
+        return jsonify({'success': False, 'error': 'Storage must be between 5 and 2000 GB'}), 400
+
+    os_version = str(data.get('os_version', '')).strip()
+    if os_version not in {item['value'] for item in OS_OPTIONS}:
+        return jsonify({'success': False, 'error': 'Unsupported OS image'}), 400
+
+    raw_hostname = str(data.get('hostname') or '').strip().lower()
+    slug = re.sub(r'[^a-z0-9-]+', '-', raw_hostname).strip('-')[:40].strip('-')
+    if raw_hostname and not slug:
+        return jsonify({'success': False, 'error': 'Hostname must contain letters or numbers'}), 400
+
+    ip_address = str(data.get('ip_address') or '').strip() or None
+    ip_alias = str(data.get('ip_alias') or '').strip() or None
+    if ip_address:
+        try:
+            ipaddress.ip_address(ip_address)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid IP address'}), 400
+
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+            if not cur.fetchone():
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+
+        node = get_node(node_id)
+        if not node:
+            return jsonify({'success': False, 'error': 'Node not found'}), 404
+
+        capacity = int(node.get('total_vps') or 0)
+        if capacity > 0 and get_current_vps_count(node_id) >= capacity:
+            return jsonify({'success': False, 'error': 'Node at full capacity'}), 409
+
+        try:
+            max_vps = max(1, int(get_setting('max_vps_per_user', '10')))
+        except (TypeError, ValueError):
+            max_vps = 10
+        if len(get_vps_for_user(user_id)) >= max_vps:
+            return jsonify({'success': False, 'error': f'User has reached maximum VPS limit ({max_vps})'}), 409
+    except Exception:
+        logger.exception('API VPS preflight failed')
+        return jsonify({'success': False, 'error': 'Could not validate VPS capacity'}), 500
+
+    container_name = f"{slug or 'vps'}-u{user_id}-{secrets.token_hex(3)}"
+    created_container = False
+    vps_id = None
+    try:
+        run_sync(execute_container(
+            container_name,
+            f"init {os_version} {container_name} -m {ram * 1024}MB -c {cpu} -d {disk}GB",
+            node_id=node_id,
+        ))
+        created_container = True
+        run_sync(apply_lxd_config(container_name, node_id))
+        run_sync(execute_container(container_name, f"start {container_name}", node_id=node_id))
+
+        if ip_address:
+            run_sync(configure_container_ip(container_name, ip_address, node_id))
+
+        ssh_password = run_sync(configure_ssh_and_root_password(container_name, node_id))
+        tailscale_info = run_sync(configure_tailscale(container_name, node_id))
+
+        vps_id = create_vps(
+            user_id=user_id,
+            node_id=node_id,
+            container_name=container_name,
+            hostname=raw_hostname or container_name,
+            ram=f"{ram}GB",
+            cpu=str(cpu),
+            storage=f"{disk}GB",
+            config=f"{ram}GB RAM / {cpu} CPU / {disk}GB Disk",
+            os_version=os_version,
+            ip_address=ip_address,
+            ip_alias=ip_alias,
+            expiration_days=max(0, min(int(data.get('expiration_days') or 0), 3650)),
+            auto_suspend_enabled=bool(data.get('auto_suspend_enabled', False)),
+        )
+        metadata = {'tailscale': tailscale_info}
+        if ssh_password:
+            metadata['ssh_password_encrypted'] = encrypt_vps_ssh_password(ssh_password)
+        update_vps(vps_id, metadata=metadata)
+        log_activity(
+            request.api_key_info['user_id'],
+            'api_create_vps',
+            'vps',
+            str(vps_id),
+            {'owner_id': user_id, 'node_id': node_id, 'container': container_name},
+        )
         return jsonify({
             'success': True,
-            'message': 'VPS creation started',
-            'note': 'Full implementation requires integration with nrb.py VPS creation logic'
+            'message': 'VPS created successfully',
+            'vps_id': vps_id,
+            'container_name': container_name,
+            'ssh_ready': bool(ssh_password),
         }), 201
-    except Exception as e:
-        logger.error(f"API create VPS error: {e}")
-        return jsonify({'success': False, 'error': 'Request failed'}), 500
+    except Exception:
+        logger.exception('API VPS creation failed')
+        if vps_id is not None:
+            try:
+                delete_vps(vps_id)
+            except Exception:
+                logger.exception('Could not roll back VPS database record %s', vps_id)
+        if created_container:
+            try:
+                run_sync(execute_container(container_name, f"delete {container_name} --force", node_id=node_id))
+            except Exception:
+                logger.exception('Could not roll back LXD container %s', container_name)
+        return jsonify({'success': False, 'error': 'VPS creation failed; check panel logs'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/start', methods=['POST'])
 @require_api_key
