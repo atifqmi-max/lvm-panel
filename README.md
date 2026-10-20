@@ -7,7 +7,7 @@ LVM Panel is a Flask-based control panel for managing Linux VPS instances throug
 On a **full Ubuntu/Debian VPS or VM with systemd**, run as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atifqmi-max/lvm-panel/main/install.sh | sudo bash -s -- --install
 ```
 
 The installer downloads the repository into `/opt/lvm-panel` and opens an interactive management menu. Choose **1** to install/initialize LXD and the panel. After installation, the web panel is available at:
