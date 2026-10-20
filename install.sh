@@ -91,7 +91,7 @@ install_panel() {
   python3 -m venv venv
   venv/bin/python -m pip install --upgrade pip
   venv/bin/python -m pip install -r requirements.txt
-  python3 -m py_compile nrb.py api.py node.py lxd_backend.py
+  python3 -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
   chmod +x start.sh nrb-tool.sh install.sh
 
   if [[ ! -f /etc/lvm-panel.env ]]; then
@@ -164,7 +164,7 @@ repair_panel() {
   cd "$APP_DIR"
   python3 -m venv venv
   venv/bin/python -m pip install -r requirements.txt
-  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py
+  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
   systemctl daemon-reload
   systemctl restart "$SERVICE" || true
   echo "Repair checks completed. See Logs if service is not active."
@@ -186,13 +186,22 @@ update_panel() {
     cp -a "$top/." "$tmp/source/"
   fi
   [[ -f "$tmp/source/nrb.py" ]] || { echo "Could not download project source."; return 1; }
+  # Preserve user uploads before replacing static assets from the new release.
+  if [[ -d "$APP_DIR/static/uploads" ]]; then
+    mkdir -p "$tmp/preserved-uploads"
+    cp -a "$APP_DIR/static/uploads/." "$tmp/preserved-uploads/"
+  fi
   systemctl stop "$SERVICE" || true
-  for f in nrb.py api.py node.py lxd_backend.py templates static requirements.txt start.sh nrb-tool.sh README.md README_NRB.md; do
+  for f in nrb.py api.py node.py lxd_backend.py security_utils.py templates static requirements.txt start.sh nrb-tool.sh README.md README_NRB.md; do
     [[ -e "$tmp/source/$f" ]] && { rm -rf "$APP_DIR/$f"; cp -a "$tmp/source/$f" "$APP_DIR/$f"; }
   done
+  if [[ -d "$tmp/preserved-uploads" ]]; then
+    mkdir -p "$APP_DIR/static/uploads"
+    cp -a "$tmp/preserved-uploads/." "$APP_DIR/static/uploads/"
+  fi
   cd "$APP_DIR"
   venv/bin/python -m pip install -r requirements.txt
-  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py
+  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
   systemctl restart "$SERVICE"
   echo "Update complete."
 }
