@@ -14,7 +14,7 @@ The installer downloads the repository into `/opt/lvm-panel` and opens an intera
 
 `http://YOUR_SERVER_IP:5000`
 
-Open TCP port 5000 in both UFW (menu option 7) and your provider's cloud firewall/security group if applicable.
+Open TCP port 5000 in both UFW (menu option 7) and your provider's cloud firewall/security group if applicable. The menu is interactive even when launched through `curl | sudo bash`; for unattended provisioning, download the script and run `bash install.sh --install`.
 
 ## Menu options
 
@@ -31,7 +31,7 @@ Open TCP port 5000 in both UFW (menu option 7) and your provider's cloud firewal
 11. Uninstall panel code/service (confirmation required; leaves LXD installed)
 0. Exit
 
-The panel is installed under `/opt/lvm-panel`, runs as a systemd service named `lvm-panel`, and reads configuration from `/etc/lvm-panel.env`. Initial admin credentials are generated on first install and written to `/root/lvm-panel-credentials.txt` with restrictive file permissions. Save them securely.
+The panel is installed under `/opt/lvm-panel`, runs as a systemd service named `lvm-panel`, and reads configuration from `/etc/lvm-panel.env`. Initial admin credentials are generated on first install and written to `/root/lvm-panel-credentials.txt` with restrictive file permissions. Save them securely. The app refuses to create a first administrator with missing/default credentials. Socket.IO defaults to same-origin, API keys are accepted only in the `X-API-Key` header, SVG uploads are disabled, and proxy headers are ignored unless `TRUST_PROXY_HEADERS=True` is explicitly set for a trusted reverse proxy. LXD instances are unprivileged by default; set `LVM_ALLOW_PRIVILEGED_CONTAINERS=True` only when you understand the isolation trade-off. The node agent binds to `127.0.0.1` by default; set `NODE_BIND_HOST` only when remote access is needed and restrict it to a private network/firewall.
 
 ## Requirements and limitations
 
@@ -41,7 +41,7 @@ The panel is installed under `/opt/lvm-panel`, runs as a systemd service named `
 - TCP/5000 is plain HTTP by default. Put it behind a properly configured HTTPS reverse proxy before exposing credentials over an untrusted network.
 - LXD has powerful host-level access. Only install on servers you administer and keep the host, LXD and panel updated.
 - Per-instance disk quota enforcement depends on the LXD storage pool driver; directory-backed pools may not enforce configured sizes.
-- This installer manages the existing project's available features; it does not create new backend features that are absent from the application.
+- This installer configures the application's implemented features; it does not fake successful actions or create backend features that are absent from the application.
 
 ## Manual development run
 
