@@ -94,6 +94,29 @@ PANEL_NAME = os.getenv('PANEL_NAME', 'LVM Panel')
 PANEL_VERSION = os.getenv('PANEL_VERSION', '1.0')
 PANEL_DEVELOPER = os.getenv('PANEL_DEVELOPER', 'LVM Panel')
 SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_urlsafe(32))
+
+
+def _ssh_password_cipher():
+    """Encrypt stored VPS SSH passwords using the persistent panel secret."""
+    from cryptography.fernet import Fernet
+    key = base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode('utf-8')).digest())
+    return Fernet(key)
+
+
+def encrypt_vps_ssh_password(password):
+    if not password:
+        return None
+    return _ssh_password_cipher().encrypt(password.encode('utf-8')).decode('ascii')
+
+
+def decrypt_vps_ssh_password(encrypted_password):
+    if not encrypted_password:
+        return None
+    try:
+        return _ssh_password_cipher().decrypt(encrypted_password.encode('ascii')).decode('utf-8')
+    except Exception:
+        logger.warning('Stored VPS SSH password could not be decrypted; rotate it on the next SSH setup')
+        return None
 DATABASE_PATH = os.getenv('DATABASE_PATH', 'nrb.db')
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 5000))
@@ -790,7 +813,7 @@ def main_admin_required(f):
 def api_key_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        api_key = request.headers.get('X-API-Key')
         if not api_key:
             return jsonify({'error': 'API key required'}), 401
         
@@ -938,13 +961,14 @@ if socketio:
 # LXD Container Runtime
 # LXD instance execution
 # Kept behind the existing internal call signature so the rest of NRB remains compatible.
-async def configure_ssh_and_root_password(container_name: str, node_id: int):
+async def configure_ssh_and_root_password(container_name: str, node_id: int, root_password: Optional[str] = None):
     """Best-effort SSH setup for an Ubuntu/Debian LXD VPS.
 
     VPS creation must not fail just because a package mirror is temporarily
     unavailable. The container remains usable through the browser console and
     SSH setup can be retried later.
     """
+    root_password = root_password or secrets.token_urlsafe(24)
     payload = "exec " + container_name + " -- " + r"""set -u
 export DEBIAN_FRONTEND=noninteractive
 
@@ -975,7 +999,7 @@ fi
 mkdir -p /run/sshd /etc/ssh/sshd_config.d
 ssh-keygen -A >/dev/null 2>&1 || true
 printf '%s\n'   'PermitRootLogin yes'   'PasswordAuthentication yes'   'KbdInteractiveAuthentication yes'   'UsePAM yes'   'Port 22' > /etc/ssh/sshd_config.d/99-nrb.conf
-printf '%s\n' 'root:root' | chpasswd
+printf '%s\n' __ROOT_PASSWORD__ | chpasswd
 
 SSHD_BIN="$(command -v sshd 2>/dev/null || true)"
 [ -n "$SSHD_BIN" ] || [ ! -x /usr/sbin/sshd ] || SSHD_BIN=/usr/sbin/sshd
@@ -1004,14 +1028,15 @@ fi
 
 echo "NRB_SSH_READY"
 """
+    payload = payload.replace("__ROOT_PASSWORD__", shlex.quote("root:" + root_password))
     try:
         result = await execute_container(container_name, payload, timeout=600, node_id=node_id)
-        logger.info(f"SSH configured for {container_name}: {result}")
-        return True
+        logger.info(f"SSH configured for {container_name}")
+        return root_password
     except Exception as e:
         # SSH setup is intentionally non-fatal to VPS creation.
         logger.warning(f"SSH setup pending for {container_name}: {e}")
-        return False
+        return None
 
 async def execute_container(container_name: str, command: str, timeout=120, node_id: Optional[int] = None):
     """Execute a VPS operation through the local or remote LXD runtime."""
@@ -4073,9 +4098,49 @@ def vps_detail(vps_id):
 # VPS File Manager Routes - SFTP Based
 # ============================================================================
 
-def get_sftp_connection(vps):
-    """Create SFTP connection to VPS"""
+def configure_vps_ssh_host_key(ssh_client, vps, hostname, port):
+    """Pin the VPS SSH host key obtained over the authenticated LXD management channel."""
     import paramiko
+
+    if not hostname or any(ch.isspace() or ord(ch) < 32 for ch in hostname):
+        raise ValueError("Invalid SSH hostname")
+    port = int(port)
+    if not 1 <= port <= 65535:
+        raise ValueError("Invalid SSH port")
+
+    container_name = str(vps.get("container_name") or "")
+    node_id = vps.get("node_id")
+    if not container_name or node_id is None:
+        raise RuntimeError("VPS container identity is unavailable")
+
+    script = 'for f in /etc/ssh/ssh_host_*_key.pub; do [ -r "$f" ] && cat "$f"; done'
+    command = f"exec {shlex.quote(container_name)} -- sh -lc {shlex.quote(script)}"
+    public_keys = run_sync(execute_container(container_name, command, timeout=15, node_id=node_id))
+    known_host = hostname if port == 22 else f"[{hostname}]:{port}"
+    host_keys = ssh_client.get_host_keys()
+    added = 0
+
+    for line in str(public_keys or "").splitlines():
+        parts = line.strip().split()
+        if len(parts) < 2:
+            continue
+        try:
+            entry = paramiko.hostkeys.HostKeyEntry.from_line(f"{known_host} {parts[0]} {parts[1]}")
+        except Exception:
+            entry = None
+        if entry and entry.key:
+            host_keys.add(known_host, entry.key.get_name(), entry.key)
+            added += 1
+
+    if not added:
+        raise RuntimeError("Could not verify VPS SSH host key through LXD")
+    ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy())
+
+
+def get_sftp_connection(vps):
+    """Create SFTP connection to VPS using its unique generated credential."""
+    import paramiko
+    ssh_password = get_or_rotate_vps_ssh_password(vps)
 
     # Get node to find the actual host
     node = get_node(vps['node_id'])
@@ -4093,13 +4158,13 @@ def get_sftp_connection(vps):
         if private_ip and private_ip != "N/A":
             # Try direct connection to private IP
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             try:
+                configure_vps_ssh_host_key(ssh, vps, private_ip, 22)
                 ssh.connect(
                     hostname=private_ip,
                     port=22,
                     username='root',
-                    password='root',
+                    password=ssh_password,
                     timeout=5,
                     allow_agent=False,
                     look_for_keys=False
@@ -4149,15 +4214,16 @@ def get_sftp_connection(vps):
 
     # Create SSH client
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
+        # Pin the key read from the VPS over the authenticated LXD management channel.
+        configure_vps_ssh_host_key(ssh, vps, node_host, ssh_port)
         # Connect with root:root credentials via port forward
         ssh.connect(
             hostname=node_host,
             port=ssh_port,
             username='root',
-            password='root',
+            password=ssh_password,
             timeout=10,
             allow_agent=False,
             look_for_keys=False
@@ -4653,6 +4719,13 @@ def vps_console(vps_id):
 
     # Get VPS IP address
     vps_ip = vps.get('ip_address', '')
+    ssh_password = decrypt_vps_ssh_password((vps.get('metadata') or {}).get('ssh_password_encrypted'))
+    if not ssh_password and vps.get('status') == 'running':
+        try:
+            ssh_password = get_or_rotate_vps_ssh_password(vps)
+        except Exception as exc:
+            logger.warning("Could not provision SSH credentials for VPS %s: %s", vps_id, exc)
+    vps['ssh_password'] = ssh_password or ''
     
     return render_template(
         'console.html',
@@ -4713,13 +4786,13 @@ if socketio and SSH_AVAILABLE:
             try:
                 # Create SSH client
                 ssh_client = paramiko.SSHClient()
-                ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-                # Connect to SSH
+                # Connect only after pinning the expected host key from the VPS itself.
                 try:
                     port = int(port)
-                except:
+                except (TypeError, ValueError):
                     port = 22
+                configure_vps_ssh_host_key(ssh_client, vps, host, port)
                 
                 logger.info(f"Connecting to SSH: {username}@{host}:{port}")
                 ssh_client.connect(
@@ -5008,10 +5081,13 @@ def vps_reinstall(vps_id):
             logger.info(f"IP address {vps['ip_address']} configured for {container_name}")
         
         # SSH is best-effort; a temporary package mirror failure must not delete the VPS.
-        ssh_ready = run_sync(configure_ssh_and_root_password(container_name, node_id))
-        logger.info(f"SSH setup result for {container_name}: {ssh_ready}")
-        tailscale_info = run_sync(configure_tailscale(container_name, node_id))
         existing_meta = vps.get('metadata') or {}
+        current_ssh_password = decrypt_vps_ssh_password(existing_meta.get('ssh_password_encrypted'))
+        ssh_ready = run_sync(configure_ssh_and_root_password(container_name, node_id, current_ssh_password))
+        logger.info(f"SSH setup result for {container_name}: {'ready' if ssh_ready else 'pending'}")
+        if ssh_ready:
+            existing_meta['ssh_password_encrypted'] = encrypt_vps_ssh_password(ssh_ready)
+        tailscale_info = run_sync(configure_tailscale(container_name, node_id))
         existing_meta['tailscale'] = tailscale_info
         update_vps(vps_id, metadata=existing_meta)
         logger.info(f"Tailscale setup result for {container_name}: {tailscale_info}")
@@ -6590,7 +6666,7 @@ def admin_vps_create():
             run_sync(configure_container_ip(container_name, ip_address, node_id))
         
         ssh_ready = run_sync(configure_ssh_and_root_password(container_name, node_id))
-        logger.info(f"SSH setup result for {container_name}: {ssh_ready}")
+        logger.info(f"SSH setup result for {container_name}: {'ready' if ssh_ready else 'pending'}")
         
         config_str = f"{ram}GB RAM / {cpu} CPU / {disk}GB Disk"
         vps_id = create_vps(
@@ -6610,7 +6686,10 @@ def admin_vps_create():
         )
 
         tailscale_info = run_sync(configure_tailscale(container_name, node_id))
-        update_vps(vps_id, metadata={'tailscale': tailscale_info})
+        metadata = {'tailscale': tailscale_info}
+        if ssh_ready:
+            metadata['ssh_password_encrypted'] = encrypt_vps_ssh_password(ssh_ready)
+        update_vps(vps_id, metadata=metadata)
         logger.info(f"Tailscale setup for {container_name}: {tailscale_info}")
         
         log_activity(current_user.id, 'admin_create_vps', 'vps', str(vps_id),
@@ -8317,7 +8396,7 @@ def unshare_vps(vps_id):
 # ============================================================================
 @app.route('/api/ping', methods=['GET'])
 def api_ping():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8333,41 +8412,47 @@ def api_ping():
 
 @app.route('/api/execute', methods=['POST'])
 def api_execute():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
-    
+
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute('SELECT id FROM nodes WHERE api_key = ?', (api_key,))
         node = cur.fetchone()
-    
+
     if not node:
         return jsonify({'error': 'Invalid API key'}), 401
-    
-    data = request.get_json()
-    command = data.get('command')
-    
+
+    data = request.get_json(silent=True) or {}
+    container = str(data.get('container', '')).strip()
+    command = str(data.get('command', '')).strip()
+    try:
+        timeout = min(max(int(data.get('timeout', 120)), 1), 900)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid timeout'}), 400
+
+    if not container:
+        return jsonify({'error': 'Container name required'}), 400
     if not command:
         return jsonify({'error': 'Command required'}), 400
-    
+
     try:
-        cmd = shlex.split(command)
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        
+        # Route operations through the LXD abstraction. Never run API-supplied
+        # commands directly on the panel host with subprocess.
+        result = run_sync(execute_container(container, command, timeout=timeout, node_id=node['id']))
         return jsonify({
-            'stdout': proc.stdout,
-            'stderr': proc.stderr,
-            'returncode': proc.returncode
+            'success': True,
+            'stdout': result if isinstance(result, str) else '',
+            'result': result
         })
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Command timed out'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        logger.error('Node API LXD operation failed', exc_info=True)
+        return jsonify({'success': False, 'error': 'LXD operation failed'}), 500
 
 @app.route('/api/get_host_stats', methods=['GET'])
 def api_get_host_stats():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8389,7 +8474,7 @@ def api_get_host_stats():
 
 @app.route('/api/get_container_stats', methods=['POST'])
 def api_get_container_stats():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8426,7 +8511,8 @@ def api_get_container_stats():
             'network': network
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error('Node API operation failed', exc_info=True)
+        return jsonify({'error': 'Node API operation failed'}), 500
 
 # ============================================================================
 # Resource Monitor Thread

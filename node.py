@@ -5,11 +5,13 @@ import os
 import platform
 import shutil
 import time
+import logging
 from datetime import datetime
 from flask import Flask, jsonify, request
 from lxd_backend import LXDRuntime
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 API_KEY = os.getenv('NRB_NODE_API_KEY', '')
 PORT = int(os.getenv('PORT', '9000'))
 BIND_HOST = os.getenv('NODE_BIND_HOST', '127.0.0.1')
@@ -46,8 +48,9 @@ def host_stats():
             disk={'total': round(disk.total / 1024**3, 2), 'used': round(disk.used / 1024**3, 2), 'free': round(disk.free / 1024**3, 2), 'total_gb': round(disk.total / 1024**3, 2), 'percent': disk.percent},
             uptime=f'{int(time.time() - STARTED_AT)} seconds'
         )
-    except Exception as exc:
-        return jsonify(error=str(exc)), 500
+    except Exception:
+        logger.exception('Node operation failed')
+        return jsonify(error='Node operation failed'), 500
 
 
 @app.get('/api/info')
@@ -59,8 +62,9 @@ def info():
         version = LXDRuntime._run_sync(['lxc', 'version'], timeout=10)
         LXDRuntime._run_sync(['lxc', 'info'], timeout=10)
         return jsonify(success=True, version='LVM LXD Node 1.0', python_version=platform.python_version(), runtime='LXD', lxd_version=version)
-    except Exception as exc:
-        return jsonify(success=False, error=str(exc), runtime='LXD'), 503
+    except Exception:
+        logger.exception('Node information request failed')
+        return jsonify(success=False, error='Node information unavailable', runtime='LXD'), 503
 
 
 @app.post('/api/execute')
@@ -77,8 +81,9 @@ def execute():
     try:
         result = asyncio.run(LXDRuntime.run(container, command, timeout=timeout))
         return jsonify(success=True, stdout=result if isinstance(result, str) else '', result=result)
-    except Exception as exc:
-        return jsonify(success=False, error=str(exc)), 500
+    except Exception:
+        logger.exception('Node LXD operation failed')
+        return jsonify(success=False, error='LXD operation failed'), 500
 
 
 @app.post('/api/container/stats')
@@ -105,8 +110,9 @@ def container_stats():
         disk_values = disk_lines[-1].split() if len(disk_lines) > 1 else []
         disk_value = f'{disk_values[2]}/{disk_values[1]} ({disk_values[4]})' if len(disk_values) > 4 else 'Unknown'
         return jsonify(status=status_line, cpu=0, ram={'used': mem_used, 'total': mem_total, 'percent': (mem_used / mem_total * 100) if mem_total else 0}, disk=disk_value, uptime=str(uptime).strip(), processes=int(str(processes).strip() or 0), network={})
-    except Exception as exc:
-        return jsonify(error=str(exc)), 500
+    except Exception:
+        logger.exception('Node operation failed')
+        return jsonify(error='Node operation failed'), 500
 
 
 @app.get('/api/status')
@@ -118,8 +124,9 @@ def status():
         version = LXDRuntime._run_sync(['lxc', 'version'], timeout=10)
         LXDRuntime._run_sync(['lxc', 'info'], timeout=10)
         return jsonify(success=True, runtime='LXD', version=version)
-    except Exception as exc:
-        return jsonify(success=False, runtime='LXD', error=str(exc)), 503
+    except Exception:
+        logger.exception('Node status request failed')
+        return jsonify(success=False, runtime='LXD', error='Node status unavailable'), 503
 
 
 @app.post('/api/container/<action>')
@@ -136,8 +143,9 @@ def container_action(action):
     try:
         result = asyncio.run(LXDRuntime.run(name, f'{actions[action]} {name}', timeout=120))
         return jsonify(success=True, result=result)
-    except Exception as exc:
-        return jsonify(success=False, error=str(exc)), 500
+    except Exception:
+        logger.exception('Node LXD operation failed')
+        return jsonify(success=False, error='LXD operation failed'), 500
 
 
 if __name__ == '__main__':
