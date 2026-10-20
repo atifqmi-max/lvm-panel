@@ -349,8 +349,22 @@ update_panel() {
 
 firewall_panel() {
   if ! command -v ufw >/dev/null 2>&1; then apt-get update && apt-get install -y ufw; fi
-  echo "Opening TCP/${PORT} with UFW. If your VPS provider has a cloud firewall, allow it there too."
+  echo "Adding an inbound rule for TCP/${PORT}. If your VPS provider has a cloud firewall, allow it there too."
   ufw allow "${PORT}/tcp"
+  if ! ufw status | grep -q "Status: active"; then
+    local ssh_port="22"
+    if command -v sshd >/dev/null 2>&1; then
+      ssh_port="$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')"
+      ssh_port="${ssh_port:-22}"
+    fi
+    echo "UFW is currently inactive. Before enabling it, allowing SSH on TCP/${ssh_port}."
+    ufw allow "${ssh_port}/tcp"
+    read -r -p "Enable UFW now? Check your provider firewall and custom SSH port first [y/N]: " enable_ufw
+    case "${enable_ufw,,}" in
+      y|yes) ufw --force enable ;;
+      *) echo "Rules were added, but UFW remains inactive. Enable it manually when remote access is confirmed." ;;
+    esac
+  fi
   ufw status
 }
 system_info() {
