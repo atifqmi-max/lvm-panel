@@ -112,6 +112,7 @@ MAIN_ADMIN_EMAIL=admin@localhost
 DEBUG_MODE=False
 TRUST_PROXY_HEADERS=False
 LVM_ALLOW_PRIVILEGED_CONTAINERS=False
+SESSION_COOKIE_SECURE=False
 EOF
     chmod 600 /etc/lvm-panel.env
     printf '%s\n' "Initial admin credentials (save them now):" "Username: admin" "Password: $adminpass" | tee /root/lvm-panel-credentials.txt
