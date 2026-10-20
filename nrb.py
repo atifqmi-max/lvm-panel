@@ -790,7 +790,7 @@ def main_admin_required(f):
 def api_key_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        api_key = request.headers.get('X-API-Key') or request.headers.get('X-API-Key')
         if not api_key:
             return jsonify({'error': 'API key required'}), 401
         
@@ -8317,7 +8317,7 @@ def unshare_vps(vps_id):
 # ============================================================================
 @app.route('/api/ping', methods=['GET'])
 def api_ping():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8333,7 +8333,7 @@ def api_ping():
 
 @app.route('/api/execute', methods=['POST'])
 def api_execute():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8363,11 +8363,12 @@ def api_execute():
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'Command timed out'}), 504
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error('Node API operation failed', exc_info=True)
+        return jsonify({'error': 'Node API operation failed'}), 500
 
 @app.route('/api/get_host_stats', methods=['GET'])
 def api_get_host_stats():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8389,7 +8390,7 @@ def api_get_host_stats():
 
 @app.route('/api/get_container_stats', methods=['POST'])
 def api_get_container_stats():
-    api_key = request.args.get('api_key')
+    api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
     
@@ -8426,7 +8427,8 @@ def api_get_container_stats():
             'network': network
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error('Node API operation failed', exc_info=True)
+        return jsonify({'error': 'Node API operation failed'}), 500
 
 # ============================================================================
 # Resource Monitor Thread
