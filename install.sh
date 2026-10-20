@@ -15,13 +15,11 @@ if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
   echo "PORT must be an integer from 1 to 65535." >&2
   exit 2
 fi
-# BASH_SOURCE[0] can be unset when this installer is piped to `bash` on stdin.
-SCRIPT_PATH="${BASH_SOURCE[0]:-}"
-if [[ -n "$SCRIPT_PATH" ]]; then
-  SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
-else
-  SCRIPT_DIR="$PWD"
-fi
+# Do not inspect BASH_SOURCE here: some Bash versions treat an empty
+# BASH_SOURCE array as unbound under set -u when the script is piped to stdin.
+# The installer fetches the selected repository into a temporary directory,
+# so the caller's working directory is the only portable local fallback.
+SCRIPT_DIR="$PWD"
 if [[ -f "$SCRIPT_DIR/nrb.py" ]]; then cd "$SCRIPT_DIR"; fi
 
 # `curl | sudo bash` uses stdin for the download, so attach interactive menu reads to the TTY.
