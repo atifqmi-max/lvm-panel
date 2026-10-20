@@ -530,6 +530,10 @@ if [[ ! -f "$APP_DIR/nrb.py" ]]; then
   source_dir="$(bootstrap_source)"
   mkdir -p "$APP_DIR"
   cp -a "$source_dir/." "$APP_DIR/"
-  exec bash "$APP_DIR/install.sh" --menu
+  # A fresh one-command install should install directly, not stop at the menu.
+  # Change into APP_DIR so bootstrap_source reuses the downloaded files.
+  cd "$APP_DIR"
+  exec bash "$APP_DIR/install.sh" --install
 fi
+# Existing installations open the management menu by default.
 menu
