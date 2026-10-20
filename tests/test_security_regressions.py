@@ -55,6 +55,9 @@ def test_installer_has_health_check_and_transactional_update_rollback():
     assert "restoring the previous application files" in source
     assert "Rollback archive:" in source
     assert "bash -n \"$tmp/source/install.sh\"" in source
+    assert "Enable UFW now?" in source
+    assert "Backup archive:" in source
+    assert "menu remains available" in source
     for choice in range(0, 12):
         assert f"{choice})" in source or f"{choice:2d})" in source
 
