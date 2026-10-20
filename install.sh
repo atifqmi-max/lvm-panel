@@ -236,7 +236,7 @@ update_panel() {
   echo "Preparing a staged update. Existing database, environment, uploads and virtualenv are preserved."
   [[ -d "$APP_DIR" && -f "$APP_DIR/nrb.py" ]] || { echo "Panel source is not installed at $APP_DIR." >&2; return 1; }
 
-  local tmp backup_dir stamp update_ok=1
+  local tmp backup_dir stamp update_ok=1 was_active=0 db_path=""
   tmp="$(mktemp -d)"
   stamp="$(date +%Y%m%d-%H%M%S)"
   backup_dir="/var/backups/lvm-panel"
@@ -284,26 +284,55 @@ update_panel() {
     return 1
   fi
 
-  # Back up source plus the database/uploads so a failed update can be rolled back.
-  if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.log' --exclude='/__pycache__/' "$APP_DIR/" "$tmp/backup/"; then
-    rm -rf "$tmp"
-    echo "Could not create rollback snapshot; update cancelled." >&2
-    return 1
-  fi
-  if ! tar -czf "$backup_dir/lvm-panel-$stamp.tar.gz" -C "$tmp/backup" .; then
-    rm -rf "$tmp"
-    echo "Could not save rollback archive; update cancelled." >&2
-    return 1
-  fi
-  chmod 600 "$backup_dir/lvm-panel-$stamp.tar.gz"
-
+  # Stop writes before snapshotting SQLite so the rollback copy is consistent.
   if systemctl is-active --quiet "$SERVICE"; then
+    was_active=1
     if ! systemctl stop "$SERVICE"; then
       rm -rf "$tmp"
       echo "Could not stop the service safely; update cancelled before changing application files." >&2
       return 1
     fi
   fi
+
+  # Back up source plus database/uploads so a failed update can be rolled back.
+  if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.log' --exclude='/__pycache__/' "$APP_DIR/" "$tmp/backup/"; then
+    [[ "$was_active" -eq 1 ]] && systemctl start "$SERVICE" || true
+    rm -rf "$tmp"
+    echo "Could not create rollback snapshot; update cancelled." >&2
+    return 1
+  fi
+
+  db_path="$(sed -n 's/^DATABASE_PATH=//p' /etc/lvm-panel.env 2>/dev/null | head -n1)"
+  db_path="${db_path:-$APP_DIR/nrb.db}"
+  if [[ "$db_path" != /* ]]; then db_path="$APP_DIR/$db_path"; fi
+  if [[ -f "$db_path" && "$db_path" != "$APP_DIR/nrb.db" ]]; then
+    if ! python3 - "$db_path" "$tmp/backup/external-database.sqlite3" <<'PY'
+import sqlite3
+import sys
+source = sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+finally:
+    target.close()
+    source.close()
+PY
+    then
+      [[ "$was_active" -eq 1 ]] && systemctl start "$SERVICE" || true
+      rm -rf "$tmp"
+      echo "Could not snapshot the configured external database; update cancelled." >&2
+      return 1
+    fi
+    printf '%s\\n' "$db_path" > "$tmp/backup/external-db-path.txt"
+  fi
+
+  if ! tar -czf "$backup_dir/lvm-panel-$stamp.tar.gz" -C "$tmp/backup" .; then
+    [[ "$was_active" -eq 1 ]] && systemctl start "$SERVICE" || true
+    rm -rf "$tmp"
+    echo "Could not save rollback archive; update cancelled." >&2
+    return 1
+  fi
+  chmod 600 "$backup_dir/lvm-panel-$stamp.tar.gz"
 
   if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.db' --exclude='/nrb.log' --exclude='/static/uploads/' --exclude='/__pycache__/' "$tmp/source/" "$APP_DIR/"; then
     update_ok=0
@@ -324,6 +353,25 @@ update_panel() {
       echo "CRITICAL: automatic source rollback failed. Restore $backup_dir/lvm-panel-$stamp.tar.gz manually." >&2
       rm -rf "$tmp"
       return 1
+    fi
+    if [[ -f "$tmp/backup/external-db-path.txt" && -f "$tmp/backup/external-database.sqlite3" ]]; then
+      db_path="$(cat "$tmp/backup/external-db-path.txt")"
+      if ! python3 - "$tmp/backup/external-database.sqlite3" "$db_path" <<'PY'
+import sqlite3
+import sys
+source = sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+finally:
+    target.close()
+    source.close()
+PY
+      then
+        echo "CRITICAL: external database rollback failed; restore the DB backup manually." >&2
+        rm -rf "$tmp"
+        return 1
+      fi
     fi
     if [[ -x "$APP_DIR/venv/bin/python" && -f "$APP_DIR/requirements.txt" ]]; then
       "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt" || echo "Warning: dependency rollback needs attention." >&2
