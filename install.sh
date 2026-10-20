@@ -80,6 +80,10 @@ wait_for_health() {
 install_panel() {
   echo
   echo "== Install / initialize LVM Panel =="
+  if [[ -f "$APP_DIR/nrb.py" && -f /etc/lvm-panel.env ]]; then
+    echo "LVM Panel is already installed. Use menu option 8 to update or option 9 to repair it."
+    return 1
+  fi
   local source
   source="$(bootstrap_source)"
   if [[ "$source" != "$APP_DIR" ]]; then
@@ -201,6 +205,12 @@ restart_panel() {
 }
 status_panel() {
   echo "== Service =="; systemctl --no-pager --full status "$SERVICE" || true
+  echo; echo "== Application health =="
+  if curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/api/v1/health" 2>/dev/null; then
+    echo
+  else
+    echo "Health endpoint is not responding on port ${PORT}."
+  fi
   echo; echo "== LXD =="; if command -v lxc >/dev/null 2>&1; then lxc info 2>&1 | head -n 25 || true; else echo "LXD not installed"; fi
   echo; echo "== Listening port =="; ss -lntp 2>/dev/null | grep -E ":${PORT}[[:space:]]" || echo "Nothing listening on port ${PORT}"
 }
@@ -284,7 +294,13 @@ update_panel() {
   fi
   chmod 600 "$backup_dir/lvm-panel-$stamp.tar.gz"
 
-  systemctl stop "$SERVICE" || true
+  if systemctl is-active --quiet "$SERVICE"; then
+    if ! systemctl stop "$SERVICE"; then
+      rm -rf "$tmp"
+      echo "Could not stop the service safely; update cancelled before changing application files." >&2
+      return 1
+    fi
+  fi
 
   if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.db' --exclude='/nrb.log' --exclude='/static/uploads/' --exclude='/__pycache__/' "$tmp/source/" "$APP_DIR/"; then
     update_ok=0
@@ -343,19 +359,40 @@ system_info() {
   echo "Port: ${PORT}"
 }
 uninstall_panel() {
-  echo "This removes the panel service and application code. Database/backups will be preserved unless separately deleted."
+  echo "This removes the panel service and application code. A protected archive of the database, uploads, and environment config will be created first."
   read -r -p "Type REMOVE to continue: " answer
   [[ "$answer" == "REMOVE" ]] || { echo "Cancelled."; return; }
+
+  local stamp backup_dir db_path
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  backup_dir="/var/backups/lvm-panel/uninstall-$stamp"
+  mkdir -p "$backup_dir"
+  chmod 700 "$backup_dir"
+
+  if [[ -f /etc/lvm-panel.env ]]; then
+    cp -a /etc/lvm-panel.env "$backup_dir/lvm-panel.env"
+    db_path="$(sed -n 's/^DATABASE_PATH=//p' /etc/lvm-panel.env | head -n1)"
+  else
+    db_path=""
+  fi
+  if [[ -n "$db_path" && "$db_path" != /* ]]; then db_path="$APP_DIR/$db_path"; fi
+  if [[ -n "$db_path" && -f "$db_path" ]]; then cp -a "$db_path" "$backup_dir/database.sqlite3"; fi
+  if [[ -d "$APP_DIR/static/uploads" ]]; then cp -a "$APP_DIR/static/uploads" "$backup_dir/uploads"; fi
+  if [[ -f "$APP_DIR/nrb.db" && "$APP_DIR/nrb.db" != "$db_path" ]]; then cp -a "$APP_DIR/nrb.db" "$backup_dir/nrb.db"; fi
+  if ! tar -czf "$backup_dir.tar.gz" -C "$(dirname "$backup_dir")" "$(basename "$backup_dir")"; then
+    echo "Backup archive failed; refusing to uninstall." >&2
+    return 1
+  fi
+  chmod 600 "$backup_dir.tar.gz"
+  rm -rf "$backup_dir"
+
   systemctl disable --now "$SERVICE" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE}.service"
   systemctl daemon-reload
-  if [[ -d "$APP_DIR" ]]; then
-    mkdir -p /var/backups/lvm-panel
-    [[ -f "$APP_DIR/nrb.db" ]] && cp -a "$APP_DIR/nrb.db" "/var/backups/lvm-panel/nrb-$(date +%Y%m%d-%H%M%S).db"
-    rm -rf "$APP_DIR"
-  fi
+  rm -rf "$APP_DIR"
   rm -f /etc/lvm-panel.env
   echo "Panel removed. LXD was left installed because it may contain VPS instances."
+  echo "Backup archive: $backup_dir.tar.gz"
 }
 
 menu() {
