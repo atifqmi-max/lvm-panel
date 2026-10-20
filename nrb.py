@@ -96,8 +96,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_urlsafe(32))
 DATABASE_PATH = os.getenv('DATABASE_PATH', 'nrb.db')
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 5000))
-MAIN_ADMIN_USERNAME = os.getenv('MAIN_ADMIN_USERNAME', 'admin')
-MAIN_ADMIN_PASSWORD = os.getenv('MAIN_ADMIN_PASSWORD', 'admin')
+MAIN_ADMIN_USERNAME = os.getenv('MAIN_ADMIN_USERNAME', '').strip()
+MAIN_ADMIN_PASSWORD = os.getenv('MAIN_ADMIN_PASSWORD', '')
 MAIN_ADMIN_EMAIL = os.getenv('MAIN_ADMIN_EMAIL', 'admin@localhost')
 YOUR_SERVER_IP = os.getenv('YOUR_SERVER_IP', socket.gethostbyname(socket.gethostname()))
 DEFAULT_STORAGE_POOL = os.getenv('DEFAULT_STORAGE_POOL', 'default')
@@ -145,13 +145,15 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg'}
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico'}
 app.config['MAX_IMAGE_SIZE'] = 5 * 1024 * 1024
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+if os.getenv('TRUST_PROXY_HEADERS', 'false').lower() == 'true':
+    # Enable only when every request reaches this app through a trusted reverse proxy.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 # Initialize SocketIO
 if SOCKETIO_AVAILABLE:
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=60, ping_interval=25)
+    socketio = SocketIO(app, cors_allowed_origins=os.getenv('SOCKETIO_CORS_ALLOWED_ORIGINS') or None, async_mode='threading', ping_timeout=60, ping_interval=25)
 else:
     socketio = None
 
@@ -452,6 +454,11 @@ def init_db():
         # Create main admin if not exists
         cur.execute('SELECT COUNT(*) FROM users WHERE is_main_admin = 1')
         if cur.fetchone()[0] == 0:
+            if not MAIN_ADMIN_USERNAME or not MAIN_ADMIN_PASSWORD:
+                raise RuntimeError(
+                    'No main administrator exists. Set MAIN_ADMIN_USERNAME and MAIN_ADMIN_PASSWORD '
+                    'to unique values before initializing the database.'
+                )
             password_hash = generate_password_hash(MAIN_ADMIN_PASSWORD)
             api_key = generate_api_key(64)
             now = datetime.now().isoformat()
@@ -2776,8 +2783,11 @@ def login():
             create_notification(user.id, 'info', 'New Login', f'New login from {request.remote_addr}', expires_in=86400)
             flash(f'Welcome back, {user.username}!', 'success')
             
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+            next_page = request.args.get('next', '')
+            parsed_next = urlparse(next_page)
+            if next_page.startswith('/') and not next_page.startswith('//') and not parsed_next.netloc and not parsed_next.scheme and chr(92) not in next_page:
+                return redirect(next_page)
+            return redirect(url_for('dashboard'))
         else:
             flash('Invalid username/email or password', 'danger')
             log_activity(None, 'login_failed', 'auth', None, {'username_or_email': username_or_email, 'ip': request.remote_addr})
@@ -7535,7 +7545,7 @@ def get_system_info_dict():
             'DATABASE_PATH': DATABASE_PATH,
             'HOST': HOST,
             'PORT': PORT,
-            'MAIN_ADMIN_USERNAME': os.getenv('MAIN_ADMIN_USERNAME', 'admin'),
+            'MAIN_ADMIN_USERNAME': os.getenv('MAIN_ADMIN_USERNAME', '').strip(),
             'MAIN_ADMIN_EMAIL': os.getenv('MAIN_ADMIN_EMAIL', 'admin@localhost'),
             'YOUR_SERVER_IP': YOUR_SERVER_IP,
             'DEFAULT_STORAGE_POOL': DEFAULT_STORAGE_POOL,
