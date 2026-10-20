@@ -398,12 +398,25 @@ def api_create_vps():
         return jsonify({'success': False, 'error': 'RAM must be between 1 and 128 GB'}), 400
     if not 5 <= disk <= 2000:
         return jsonify({'success': False, 'error': 'Storage must be between 5 and 2000 GB'}), 400
+    try:
+        expiration_days = int(data.get('expiration_days') or 0)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'expiration_days must be a whole number'}), 400
+    if not 0 <= expiration_days <= 3650:
+        return jsonify({'success': False, 'error': 'expiration_days must be between 0 and 3650'}), 400
+    auto_suspend_value = data.get('auto_suspend_enabled', False)
+    if isinstance(auto_suspend_value, str):
+        auto_suspend_enabled = auto_suspend_value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    else:
+        auto_suspend_enabled = bool(auto_suspend_value)
 
     os_version = str(data.get('os_version', '')).strip()
     if os_version not in {item['value'] for item in OS_OPTIONS}:
         return jsonify({'success': False, 'error': 'Unsupported OS image'}), 400
 
     raw_hostname = str(data.get('hostname') or '').strip().lower()
+    if len(raw_hostname) > 63:
+        return jsonify({'success': False, 'error': 'Hostname must be 63 characters or fewer'}), 400
     slug = re.sub(r'[^a-z0-9-]+', '-', raw_hostname).strip('-')[:40].strip('-')
     if raw_hostname and not slug:
         return jsonify({'success': False, 'error': 'Hostname must contain letters or numbers'}), 400
@@ -428,7 +441,7 @@ def api_create_vps():
             return jsonify({'success': False, 'error': 'Node not found'}), 404
 
         capacity = int(node.get('total_vps') or 0)
-        if capacity > 0 and get_current_vps_count(node_id) >= capacity:
+        if get_current_vps_count(node_id) >= capacity:
             return jsonify({'success': False, 'error': 'Node at full capacity'}), 409
 
         try:
@@ -445,12 +458,13 @@ def api_create_vps():
     created_container = False
     vps_id = None
     try:
+        # Attempt cleanup even if LXD reports a partial failure during init.
+        created_container = True
         run_sync(execute_container(
             container_name,
             f"init {os_version} {container_name} -m {ram * 1024}MB -c {cpu} -d {disk}GB",
             node_id=node_id,
         ))
-        created_container = True
         run_sync(apply_lxd_config(container_name, node_id))
         run_sync(execute_container(container_name, f"start {container_name}", node_id=node_id))
 
@@ -472,8 +486,8 @@ def api_create_vps():
             os_version=os_version,
             ip_address=ip_address,
             ip_alias=ip_alias,
-            expiration_days=max(0, min(int(data.get('expiration_days') or 0), 3650)),
-            auto_suspend_enabled=bool(data.get('auto_suspend_enabled', False)),
+            expiration_days=expiration_days,
+            auto_suspend_enabled=auto_suspend_enabled,
         )
         metadata = {'tailscale': tailscale_info}
         if ssh_password:
