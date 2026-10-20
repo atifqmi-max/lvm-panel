@@ -82,7 +82,7 @@ install_panel() {
   echo "== Install / initialize LVM Panel =="
   if [[ -f "$APP_DIR/nrb.py" && -f /etc/lvm-panel.env ]]; then
     echo "LVM Panel is already installed. Use menu option 8 to update or option 9 to repair it."
-    return 1
+    return 0
   fi
   local source
   source="$(bootstrap_source)"
@@ -242,6 +242,9 @@ update_panel() {
   backup_dir="/var/backups/lvm-panel"
   mkdir -p "$backup_dir"
   chmod 700 "$backup_dir"
+  if ! command -v rsync >/dev/null 2>&1; then
+    apt-get update && apt-get install -y rsync
+  fi
 
   if command -v git >/dev/null 2>&1 && git clone --depth 1 --branch "$BRANCH" "$REPO" "$tmp/source" >/dev/null 2>&1; then
     :
@@ -421,17 +424,17 @@ BANNER
     echo
     read -r -p "Choose an option [0-11]: " choice || exit 0
     case "$choice" in
-      1) install_panel ;;
-      2) start_panel ;;
-      3) stop_panel ;;
-      4) restart_panel ;;
-      5) status_panel ;;
-      6) logs_panel ;;
-      7) firewall_panel ;;
-      8) update_panel ;;
-      9) repair_panel ;;
-     10) system_info ;;
-     11) uninstall_panel ;;
+      1) install_panel || { rc=$?; echo "Install option failed (exit $rc); menu remains available." >&2; } ;;
+      2) start_panel || { rc=$?; echo "Start option failed (exit $rc); menu remains available." >&2; } ;;
+      3) stop_panel || { rc=$?; echo "Stop option failed (exit $rc); menu remains available." >&2; } ;;
+      4) restart_panel || { rc=$?; echo "Restart option failed (exit $rc); menu remains available." >&2; } ;;
+      5) status_panel || { rc=$?; echo "Status option failed (exit $rc); menu remains available." >&2; } ;;
+      6) logs_panel || { rc=$?; echo "Logs option failed (exit $rc); menu remains available." >&2; } ;;
+      7) firewall_panel || { rc=$?; echo "Firewall option failed (exit $rc); menu remains available." >&2; } ;;
+      8) update_panel || { rc=$?; echo "Update option failed (exit $rc); menu remains available." >&2; } ;;
+      9) repair_panel || { rc=$?; echo "Repair option failed (exit $rc); menu remains available." >&2; } ;;
+     10) system_info || { rc=$?; echo "System-info option failed (exit $rc); menu remains available." >&2; } ;;
+     11) uninstall_panel || { rc=$?; echo "Uninstall option failed (exit $rc); menu remains available." >&2; } ;;
       0) exit 0 ;;
       *) echo "Invalid option. Choose 0-11." ;;
     esac
