@@ -8415,35 +8415,40 @@ def api_execute():
     api_key = request.headers.get('X-API-Key')
     if not api_key:
         return jsonify({'error': 'API key required'}), 401
-    
+
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute('SELECT id FROM nodes WHERE api_key = ?', (api_key,))
         node = cur.fetchone()
-    
+
     if not node:
         return jsonify({'error': 'Invalid API key'}), 401
-    
-    data = request.get_json()
-    command = data.get('command')
-    
+
+    data = request.get_json(silent=True) or {}
+    container = str(data.get('container', '')).strip()
+    command = str(data.get('command', '')).strip()
+    try:
+        timeout = min(max(int(data.get('timeout', 120)), 1), 900)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid timeout'}), 400
+
+    if not container:
+        return jsonify({'error': 'Container name required'}), 400
     if not command:
         return jsonify({'error': 'Command required'}), 400
-    
+
     try:
-        cmd = shlex.split(command)
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        
+        # Route operations through the LXD abstraction. Never run API-supplied
+        # commands directly on the panel host with subprocess.
+        result = run_sync(execute_container(container, command, timeout=timeout, node_id=node['id']))
         return jsonify({
-            'stdout': proc.stdout,
-            'stderr': proc.stderr,
-            'returncode': proc.returncode
+            'success': True,
+            'stdout': result if isinstance(result, str) else '',
+            'result': result
         })
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Command timed out'}), 504
-    except Exception as e:
-        logger.error('Node API operation failed', exc_info=True)
-        return jsonify({'error': 'Node API operation failed'}), 500
+    except Exception:
+        logger.error('Node API LXD operation failed', exc_info=True)
+        return jsonify({'success': False, 'error': 'LXD operation failed'}), 500
 
 @app.route('/api/get_host_stats', methods=['GET'])
 def api_get_host_stats():
