@@ -26,14 +26,14 @@ def require_api_key(f):
     def decorated_function(*args, **kwargs):
         from nrb import get_db
         
-        # Get API key from header or query parameter
-        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        # API keys must be sent in a header; URLs are commonly logged and leaked via history/referrers.
+        api_key = request.headers.get('X-API-Key')
         
         if not api_key:
             return jsonify({
                 'success': False,
                 'error': 'API key required',
-                'message': 'Provide API key in X-API-Key header or api_key parameter'
+                'message': 'Provide the API key in the X-API-Key header'
             }), 401
         
         # Validate API key
@@ -69,8 +69,7 @@ def require_api_key(f):
             logger.error(f"API key validation error: {e}")
             return jsonify({
                 'success': False,
-                'error': 'Authentication error',
-                'message': str(e)
+                'error': 'Authentication error'
             }), 500
         
         return f(*args, **kwargs)
