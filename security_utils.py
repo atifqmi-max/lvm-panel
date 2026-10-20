@@ -26,7 +26,7 @@ def is_safe_redirect_target(target):
     """Accept only local absolute paths, never protocol-relative/external URLs."""
     if not isinstance(target, str) or not target or target != target.strip():
         return False
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in target) or "\\\\" in target:
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in target) or "\\" in target:
         return False
     if not target.startswith("/") or target.startswith("//"):
         return False
@@ -34,7 +34,7 @@ def is_safe_redirect_target(target):
         parsed = urlsplit(target)
     except ValueError:
         return False
-    return not parsed.scheme and not parsed.netloc and not target.startswith("/\\\\")
+    return not parsed.scheme and not parsed.netloc and not target.startswith("/\\")
 
 
 def is_same_origin_request(*, origin, referer, expected_origin, sec_fetch_site, has_session_cookie):
