@@ -9,6 +9,17 @@ PORT="${PORT:-5000}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/nrb.py" ]]; then cd "$SCRIPT_DIR"; fi
 
+# `curl | sudo bash` uses stdin for the download, so attach interactive menu reads to the TTY.
+# Automation can use `bash install.sh --install` and does not need a terminal.
+if [[ "${1:-}" != "--install" && ! -t 0 ]]; then
+  if [[ -r /dev/tty ]]; then
+    exec </dev/tty
+  else
+    echo "Interactive menu requires a terminal. Use bash install.sh --install for unattended installation."
+    exit 2
+  fi
+fi
+
 trap 'rc=$?; echo; echo "[ERROR] Command failed (exit $rc) at line ${LINENO}. Review the message above."; exit "$rc"' ERR
 
 need_root() {
@@ -99,6 +110,8 @@ MAIN_ADMIN_USERNAME=admin
 MAIN_ADMIN_PASSWORD=${adminpass}
 MAIN_ADMIN_EMAIL=admin@localhost
 DEBUG_MODE=False
+TRUST_PROXY_HEADERS=False
+LVM_ALLOW_PRIVILEGED_CONTAINERS=False
 EOF
     chmod 600 /etc/lvm-panel.env
     printf '%s\n' "Initial admin credentials (save them now):" "Username: admin" "Password: $adminpass" | tee /root/lvm-panel-credentials.txt
@@ -130,6 +143,8 @@ EOF
   echo "Installation complete."
   echo "Panel: http://YOUR_SERVER_IP:${PORT}"
   echo "Credentials saved in: /root/lvm-panel-credentials.txt"
+  echo "Security: use HTTPS behind a trusted reverse proxy before exposing login traffic publicly."
+  echo "Node agent defaults to localhost; configure NODE_BIND_HOST and firewall rules for remote nodes."
   echo "Service: systemctl status ${SERVICE}"
 }
 
