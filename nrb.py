@@ -94,6 +94,29 @@ PANEL_NAME = os.getenv('PANEL_NAME', 'LVM Panel')
 PANEL_VERSION = os.getenv('PANEL_VERSION', '1.0')
 PANEL_DEVELOPER = os.getenv('PANEL_DEVELOPER', 'LVM Panel')
 SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_urlsafe(32))
+
+
+def _ssh_password_cipher():
+    """Encrypt stored VPS SSH passwords using the persistent panel secret."""
+    from cryptography.fernet import Fernet
+    key = base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode('utf-8')).digest())
+    return Fernet(key)
+
+
+def encrypt_vps_ssh_password(password):
+    if not password:
+        return None
+    return _ssh_password_cipher().encrypt(password.encode('utf-8')).decode('ascii')
+
+
+def decrypt_vps_ssh_password(encrypted_password):
+    if not encrypted_password:
+        return None
+    try:
+        return _ssh_password_cipher().decrypt(encrypted_password.encode('ascii')).decode('utf-8')
+    except Exception:
+        logger.warning('Stored VPS SSH password could not be decrypted; rotate it on the next SSH setup')
+        return None
 DATABASE_PATH = os.getenv('DATABASE_PATH', 'nrb.db')
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 5000))
@@ -938,13 +961,14 @@ if socketio:
 # LXD Container Runtime
 # LXD instance execution
 # Kept behind the existing internal call signature so the rest of NRB remains compatible.
-async def configure_ssh_and_root_password(container_name: str, node_id: int):
+async def configure_ssh_and_root_password(container_name: str, node_id: int, root_password: Optional[str] = None):
     """Best-effort SSH setup for an Ubuntu/Debian LXD VPS.
 
     VPS creation must not fail just because a package mirror is temporarily
     unavailable. The container remains usable through the browser console and
     SSH setup can be retried later.
     """
+    root_password = root_password or secrets.token_urlsafe(24)
     payload = "exec " + container_name + " -- " + r"""set -u
 export DEBIAN_FRONTEND=noninteractive
 
@@ -975,7 +999,7 @@ fi
 mkdir -p /run/sshd /etc/ssh/sshd_config.d
 ssh-keygen -A >/dev/null 2>&1 || true
 printf '%s\n'   'PermitRootLogin yes'   'PasswordAuthentication yes'   'KbdInteractiveAuthentication yes'   'UsePAM yes'   'Port 22' > /etc/ssh/sshd_config.d/99-nrb.conf
-printf '%s\n' 'root:root' | chpasswd
+printf '%s\n' __ROOT_PASSWORD__ | chpasswd
 
 SSHD_BIN="$(command -v sshd 2>/dev/null || true)"
 [ -n "$SSHD_BIN" ] || [ ! -x /usr/sbin/sshd ] || SSHD_BIN=/usr/sbin/sshd
@@ -1004,14 +1028,15 @@ fi
 
 echo "NRB_SSH_READY"
 """
+    payload = payload.replace("__ROOT_PASSWORD__", shlex.quote("root:" + root_password))
     try:
         result = await execute_container(container_name, payload, timeout=600, node_id=node_id)
-        logger.info(f"SSH configured for {container_name}: {result}")
-        return True
+        logger.info(f"SSH configured for {container_name}")
+        return root_password
     except Exception as e:
         # SSH setup is intentionally non-fatal to VPS creation.
         logger.warning(f"SSH setup pending for {container_name}: {e}")
-        return False
+        return None
 
 async def execute_container(container_name: str, command: str, timeout=120, node_id: Optional[int] = None):
     """Execute a VPS operation through the local or remote LXD runtime."""
