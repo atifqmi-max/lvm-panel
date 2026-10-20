@@ -12,7 +12,7 @@ class SafeRedirectTests(unittest.TestCase):
     def test_rejects_external_and_ambiguous_targets(self):
         for value in (
             "", "dashboard", "//evil.example/path", "https://evil.example/",
-            "http://example.com/", "/\\\\evil.example", "/path\\\\evil",
+            "http://example.com/", "/\\evil.example", "/path\\evil", "/\\\\evil.example",
             "/path\r\nLocation: https://evil.example",
         ):
             with self.subTest(value=value):
