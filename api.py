@@ -149,7 +149,7 @@ def api_list_users():
         })
     except Exception as e:
         logger.error(f"API list users error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/users/<int:user_id>', methods=['GET'])
 @require_admin_api
@@ -180,7 +180,7 @@ def api_get_user(user_id):
         })
     except Exception as e:
         logger.error(f"API get user error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/users', methods=['POST'])
 @require_admin_api
@@ -222,7 +222,7 @@ def api_create_user():
         }), 201
     except Exception as e:
         logger.error(f"API create user error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/users/<int:user_id>', methods=['PUT', 'PATCH'])
 @require_admin_api
@@ -256,7 +256,7 @@ def api_update_user(user_id):
         })
     except Exception as e:
         logger.error(f"API update user error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/users/<int:user_id>', methods=['DELETE'])
 @require_admin_api
@@ -276,7 +276,7 @@ def api_delete_user(user_id):
         })
     except Exception as e:
         logger.error(f"API delete user error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # VPS Management API
@@ -317,7 +317,7 @@ def api_list_vps():
         })
     except Exception as e:
         logger.error(f"API list VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>', methods=['GET'])
 @require_api_key
@@ -348,7 +348,7 @@ def api_get_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API get VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps', methods=['POST'])
 @require_admin_api
@@ -379,7 +379,7 @@ def api_create_vps():
         }), 201
     except Exception as e:
         logger.error(f"API create VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/start', methods=['POST'])
 @require_api_key
@@ -406,7 +406,7 @@ def api_start_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API start VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/stop', methods=['POST'])
 @require_api_key
@@ -433,7 +433,7 @@ def api_stop_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API stop VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/restart', methods=['POST'])
 @require_api_key
@@ -460,7 +460,7 @@ def api_restart_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API restart VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>', methods=['DELETE'])
 @require_admin_api
@@ -492,7 +492,7 @@ def api_delete_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API delete VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # Node Management API
@@ -514,7 +514,7 @@ def api_list_nodes():
         })
     except Exception as e:
         logger.error(f"API list nodes error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/nodes/<int:node_id>', methods=['GET'])
 @require_admin_api
@@ -541,7 +541,7 @@ def api_get_node(node_id):
         })
     except Exception as e:
         logger.error(f"API get node error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # System API
@@ -574,7 +574,7 @@ def api_system_info():
         })
     except Exception as e:
         logger.error(f"API system info error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/system/stats', methods=['GET'])
 @require_admin_api
@@ -612,7 +612,7 @@ def api_system_stats():
         })
     except Exception as e:
         logger.error(f"API system stats error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # VPS Extended Management API
@@ -651,7 +651,7 @@ def api_suspend_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API suspend VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/unsuspend', methods=['POST'])
 @require_admin_api
@@ -671,7 +671,7 @@ def api_unsuspend_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API unsuspend VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/resize', methods=['POST'])
 @require_admin_api
@@ -706,7 +706,7 @@ def api_resize_vps(vps_id):
         })
     except Exception as e:
         logger.error(f"API resize VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/<int:vps_id>/execute', methods=['POST'])
 @require_api_key
@@ -738,7 +738,7 @@ def api_execute_command(vps_id):
         })
     except Exception as e:
         logger.error(f"API execute command error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # Node Extended Management API
@@ -782,7 +782,7 @@ def api_create_node():
         }), 201
     except Exception as e:
         logger.error(f"API create node error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/nodes/<int:node_id>', methods=['PUT', 'PATCH'])
 @require_admin_api
@@ -817,7 +817,7 @@ def api_update_node(node_id):
         })
     except Exception as e:
         logger.error(f"API update node error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/nodes/<int:node_id>', methods=['DELETE'])
 @require_admin_api
@@ -837,7 +837,7 @@ def api_delete_node(node_id):
         })
     except Exception as e:
         logger.error(f"API delete node error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # Settings Management API
@@ -862,7 +862,7 @@ def api_get_settings():
         })
     except Exception as e:
         logger.error(f"API get settings error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/settings/<key>', methods=['GET'])
 @require_admin_api
@@ -883,7 +883,7 @@ def api_get_setting(key):
         })
     except Exception as e:
         logger.error(f"API get setting error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/settings/<key>', methods=['PUT', 'PATCH'])
 @require_admin_api
@@ -906,7 +906,7 @@ def api_update_setting(key):
         })
     except Exception as e:
         logger.error(f"API update setting error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # Maintenance Mode API
@@ -931,7 +931,7 @@ def api_enable_maintenance():
         })
     except Exception as e:
         logger.error(f"API enable maintenance error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/maintenance/disable', methods=['POST'])
 @require_admin_api
@@ -948,7 +948,7 @@ def api_disable_maintenance():
         })
     except Exception as e:
         logger.error(f"API disable maintenance error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # Bulk Operations API
@@ -991,7 +991,7 @@ def api_bulk_start_vps():
         })
     except Exception as e:
         logger.error(f"API bulk start VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 @api_bp.route('/vps/bulk/stop', methods=['POST'])
 @require_admin_api
@@ -1030,7 +1030,7 @@ def api_bulk_stop_vps():
         })
     except Exception as e:
         logger.error(f"API bulk stop VPS error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Request failed'}), 500
 
 # ============================================================================
 # Error Handlers
