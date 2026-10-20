@@ -80,9 +80,9 @@
                          onclick="document.getElementById('iconFile').click()" id="dropZone">
                         <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: var(--text-muted);"></i>
                         <p style="margin-top: 1rem; margin-bottom: 0.5rem;">Click to upload or drag and drop</p>
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">PNG, JPG, GIF, SVG up to 5MB</p>
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">PNG, JPG, GIF, WEBP, ICO up to 5MB</p>
                     </div>
-                    <input type="file" id="iconFile" name="icon" accept="image/*" style="display: none;" onchange="previewIcon(this)" required>
+                    <input type="file" id="iconFile" name="icon" accept="image/png,image/jpeg,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon" style="display: none;" onchange="previewIcon(this)" required>
                     <div id="imagePreview" style="display: none; margin-top: 1rem; text-align: center;">
                         <img src="" alt="Preview" style="max-height: 100px; border-radius: 8px;">
                     </div>

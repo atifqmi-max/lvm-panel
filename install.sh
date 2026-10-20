@@ -5,7 +5,16 @@ APP_DIR="/opt/lvm-panel"
 REPO="https://github.com/atifqmi-max/lvm-panel"
 BRANCH="main"
 SERVICE="lvm-panel"
+REQUESTED_PORT="${PORT:-}"
+PORT="${REQUESTED_PORT}"
+if [[ -z "$PORT" && -r /etc/lvm-panel.env ]]; then
+  PORT="$(sed -n 's/^PORT=//p' /etc/lvm-panel.env | head -n1)"
+fi
 PORT="${PORT:-5000}"
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "PORT must be an integer from 1 to 65535." >&2
+  exit 2
+fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/nrb.py" ]]; then cd "$SCRIPT_DIR"; fi
 
@@ -56,9 +65,25 @@ bootstrap_source() {
   echo "$tmp/source"
 }
 
+wait_for_health() {
+  local url="http://127.0.0.1:${PORT}/api/v1/health"
+  local i
+  for i in $(seq 1 30); do
+    if curl -fsS --max-time 2 "$url" 2>/dev/null | grep -Eq '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 install_panel() {
   echo
   echo "== Install / initialize LVM Panel =="
+  if [[ -f "$APP_DIR/nrb.py" && -f /etc/lvm-panel.env ]]; then
+    echo "LVM Panel is already installed. Use menu option 8 to update or option 9 to repair it."
+    return 0
+  fi
   local source
   source="$(bootstrap_source)"
   if [[ "$source" != "$APP_DIR" ]]; then
@@ -67,7 +92,7 @@ install_panel() {
   fi
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y python3 python3-venv python3-pip ca-certificates curl unzip snapd socat ufw
+  apt-get install -y python3 python3-venv python3-pip ca-certificates curl unzip snapd socat ufw rsync
   if [[ "$(ps -p 1 -o comm= | tr -d '[:space:]')" != "systemd" || ! -d /run/systemd/system ]]; then
     echo "This host does not use systemd as PID 1. LXD installation requires a full Ubuntu/Debian VM/VPS with systemd."
     echo "The source was placed in $APP_DIR, but LXD/service setup was not completed."
@@ -117,6 +142,12 @@ EOF
     chmod 600 /etc/lvm-panel.env
     printf '%s\n' "Initial admin credentials (save them now):" "Username: admin" "Password: $adminpass" | tee /root/lvm-panel-credentials.txt
     chmod 600 /root/lvm-panel-credentials.txt
+  elif [[ -n "$REQUESTED_PORT" ]]; then
+    if grep -q '^PORT=' /etc/lvm-panel.env; then
+      sed -i "s/^PORT=.*/PORT=${PORT}/" /etc/lvm-panel.env
+    else
+      printf '\nPORT=${PORT}\n' >> /etc/lvm-panel.env
+    fi
   fi
 
   cat > "/etc/systemd/system/${SERVICE}.service" <<EOF
@@ -140,8 +171,14 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   systemctl enable --now "$SERVICE"
+  if ! wait_for_health; then
+    echo "The service started but its health endpoint did not become ready." >&2
+    journalctl -u "$SERVICE" -n 80 --no-pager || true
+    echo "Use menu option 6 for logs, or run: systemctl status ${SERVICE}" >&2
+    return 1
+  fi
   echo
-  echo "Installation complete."
+  echo "Installation complete. Health check passed."
   echo "Panel: http://YOUR_SERVER_IP:${PORT}"
   echo "Credentials saved in: /root/lvm-panel-credentials.txt"
   echo "Security: use HTTPS behind a trusted reverse proxy before exposing login traffic publicly."
@@ -149,11 +186,31 @@ EOF
   echo "Service: systemctl status ${SERVICE}"
 }
 
-start_panel() { systemctl start "$SERVICE"; systemctl --no-pager --full status "$SERVICE" || true; }
+start_panel() {
+  systemctl start "$SERVICE"
+  if wait_for_health; then systemctl --no-pager --full status "$SERVICE"; else
+    echo "Panel did not become healthy after start." >&2
+    journalctl -u "$SERVICE" -n 60 --no-pager || true
+    return 1
+  fi
+}
 stop_panel() { systemctl stop "$SERVICE"; echo "LVM Panel stopped."; }
-restart_panel() { systemctl restart "$SERVICE"; systemctl --no-pager --full status "$SERVICE" || true; }
+restart_panel() {
+  systemctl restart "$SERVICE"
+  if wait_for_health; then systemctl --no-pager --full status "$SERVICE"; else
+    echo "Panel did not become healthy after restart." >&2
+    journalctl -u "$SERVICE" -n 60 --no-pager || true
+    return 1
+  fi
+}
 status_panel() {
   echo "== Service =="; systemctl --no-pager --full status "$SERVICE" || true
+  echo; echo "== Application health =="
+  if curl -fsS --max-time 3 "http://127.0.0.1:${PORT}/api/v1/health" 2>/dev/null; then
+    echo
+  else
+    echo "Health endpoint is not responding on port ${PORT}."
+  fi
   echo; echo "== LXD =="; if command -v lxc >/dev/null 2>&1; then lxc info 2>&1 | head -n 25 || true; else echo "LXD not installed"; fi
   echo; echo "== Listening port =="; ss -lntp 2>/dev/null | grep -E ":${PORT}[[:space:]]" || echo "Nothing listening on port ${PORT}"
 }
@@ -161,55 +218,201 @@ logs_panel() { journalctl -u "$SERVICE" -n 100 --no-pager; }
 repair_panel() {
   [[ -d "$APP_DIR" ]] || { echo "Panel is not installed. Choose Install first."; return 1; }
   apt-get update
-  apt-get install -y python3 python3-venv python3-pip socat
+  apt-get install -y python3 python3-venv python3-pip socat rsync curl
   cd "$APP_DIR"
   python3 -m venv venv
   venv/bin/python -m pip install -r requirements.txt
-  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py
+  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
   systemctl daemon-reload
-  systemctl restart "$SERVICE" || true
-  echo "Repair checks completed. See Logs if service is not active."
+  systemctl restart "$SERVICE"
+  if ! wait_for_health; then
+    echo "Repair finished, but health check failed." >&2
+    journalctl -u "$SERVICE" -n 80 --no-pager || true
+    return 1
+  fi
+  echo "Repair checks and health check passed."
 }
 update_panel() {
-  echo "Updating application files from GitHub. Database and environment file are preserved."
-  local source tmp
+  echo "Preparing a staged update. Existing database, environment, uploads and virtualenv are preserved."
+  [[ -d "$APP_DIR" && -f "$APP_DIR/nrb.py" ]] || { echo "Panel source is not installed at $APP_DIR." >&2; return 1; }
+
+  local tmp backup_dir stamp update_ok=1 was_active=0 db_path=""
   tmp="$(mktemp -d)"
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 --branch "$BRANCH" "$REPO" "$tmp/source" >/dev/null 2>&1 || true
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  backup_dir="/var/backups/lvm-panel"
+  mkdir -p "$backup_dir"
+  chmod 700 "$backup_dir"
+  if ! command -v rsync >/dev/null 2>&1; then
+    apt-get update && apt-get install -y rsync
   fi
-  if [[ ! -f "$tmp/source/nrb.py" ]]; then
-    curl -fL --retry 3 "https://codeload.github.com/atifqmi-max/lvm-panel/zip/refs/heads/${BRANCH}" -o "$tmp/source.zip"
-    unzip -q "$tmp/source.zip" -d "$tmp/unpacked"
+
+  if command -v git >/dev/null 2>&1 && git clone --depth 1 --branch "$BRANCH" "$REPO" "$tmp/source" >/dev/null 2>&1; then
+    :
+  else
+    rm -rf "$tmp/source"
+    mkdir -p "$tmp/source"
+    if ! curl -fL --retry 3 "https://codeload.github.com/atifqmi-max/lvm-panel/zip/refs/heads/${BRANCH}" -o "$tmp/source.zip"; then
+      rm -rf "$tmp"
+      echo "Could not download the update; the running application was not changed." >&2
+      return 1
+    fi
+    if ! unzip -q "$tmp/source.zip" -d "$tmp/unpacked"; then
+      rm -rf "$tmp"
+      echo "Downloaded source archive is invalid; the running application was not changed." >&2
+      return 1
+    fi
     local top
     top="$(find "$tmp/unpacked" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-    [[ -n "$top" && -f "$top/nrb.py" ]] || { echo "Update download did not contain nrb.py."; return 1; }
-    mkdir -p "$tmp/source"
+    if [[ -z "$top" || ! -f "$top/nrb.py" ]]; then
+      rm -rf "$tmp"
+      echo "Downloaded source archive does not contain nrb.py." >&2
+      return 1
+    fi
     cp -a "$top/." "$tmp/source/"
   fi
-  [[ -f "$tmp/source/nrb.py" ]] || { echo "Could not download project source."; return 1; }
-  # Preserve user uploads before replacing static assets from the new release.
-  if [[ -d "$APP_DIR/static/uploads" ]]; then
-    mkdir -p "$tmp/preserved-uploads"
-    cp -a "$APP_DIR/static/uploads/." "$tmp/preserved-uploads/"
-  fi
-  systemctl stop "$SERVICE" || true
-  for f in nrb.py api.py node.py lxd_backend.py security_utils.py templates static requirements.txt start.sh nrb-tool.sh README.md README_NRB.md; do
-    [[ -e "$tmp/source/$f" ]] && { rm -rf "$APP_DIR/$f"; cp -a "$tmp/source/$f" "$APP_DIR/$f"; }
+
+  for f in nrb.py api.py node.py lxd_backend.py security_utils.py requirements.txt install.sh start.sh nrb-tool.sh; do
+    if [[ ! -f "$tmp/source/$f" ]]; then
+      rm -rf "$tmp"
+      echo "Update is incomplete: required file $f is missing." >&2
+      return 1
+    fi
   done
-  if [[ -d "$tmp/preserved-uploads" ]]; then
-    mkdir -p "$APP_DIR/static/uploads"
-    cp -a "$tmp/preserved-uploads/." "$APP_DIR/static/uploads/"
+  if ! bash -n "$tmp/source/install.sh" || ! python3 -m py_compile "$tmp/source/nrb.py" "$tmp/source/api.py" "$tmp/source/node.py" "$tmp/source/lxd_backend.py" "$tmp/source/security_utils.py"; then
+    rm -rf "$tmp"
+    echo "Update failed preflight syntax checks; the running application was not changed." >&2
+    return 1
   fi
-  cd "$APP_DIR"
-  venv/bin/python -m pip install -r requirements.txt
-  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
-  systemctl restart "$SERVICE"
-  echo "Update complete."
+
+  # Stop writes before snapshotting SQLite so the rollback copy is consistent.
+  if systemctl is-active --quiet "$SERVICE"; then
+    was_active=1
+    if ! systemctl stop "$SERVICE"; then
+      rm -rf "$tmp"
+      echo "Could not stop the service safely; update cancelled before changing application files." >&2
+      return 1
+    fi
+  fi
+
+  # Back up source plus database/uploads so a failed update can be rolled back.
+  if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.log' --exclude='/__pycache__/' "$APP_DIR/" "$tmp/backup/"; then
+    [[ "$was_active" -eq 1 ]] && systemctl start "$SERVICE" || true
+    rm -rf "$tmp"
+    echo "Could not create rollback snapshot; update cancelled." >&2
+    return 1
+  fi
+
+  db_path="$(sed -n 's/^DATABASE_PATH=//p' /etc/lvm-panel.env 2>/dev/null | head -n1)"
+  db_path="${db_path:-$APP_DIR/nrb.db}"
+  if [[ "$db_path" != /* ]]; then db_path="$APP_DIR/$db_path"; fi
+  if [[ -f "$db_path" && "$db_path" != "$APP_DIR/nrb.db" ]]; then
+    if ! python3 - "$db_path" "$tmp/backup/external-database.sqlite3" <<'PY'
+import sqlite3
+import sys
+source = sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+finally:
+    target.close()
+    source.close()
+PY
+    then
+      [[ "$was_active" -eq 1 ]] && systemctl start "$SERVICE" || true
+      rm -rf "$tmp"
+      echo "Could not snapshot the configured external database; update cancelled." >&2
+      return 1
+    fi
+    printf '%s\\n' "$db_path" > "$tmp/backup/external-db-path.txt"
+  fi
+
+  if ! tar -czf "$backup_dir/lvm-panel-$stamp.tar.gz" -C "$tmp/backup" .; then
+    [[ "$was_active" -eq 1 ]] && systemctl start "$SERVICE" || true
+    rm -rf "$tmp"
+    echo "Could not save rollback archive; update cancelled." >&2
+    return 1
+  fi
+  chmod 600 "$backup_dir/lvm-panel-$stamp.tar.gz"
+
+  if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.db' --exclude='/nrb.log' --exclude='/static/uploads/' --exclude='/__pycache__/' "$tmp/source/" "$APP_DIR/"; then
+    update_ok=0
+  elif ! "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt"; then
+    update_ok=0
+  elif ! "$APP_DIR/venv/bin/python" -m py_compile "$APP_DIR/nrb.py" "$APP_DIR/api.py" "$APP_DIR/node.py" "$APP_DIR/lxd_backend.py" "$APP_DIR/security_utils.py"; then
+    update_ok=0
+  elif ! systemctl daemon-reload || ! systemctl start "$SERVICE"; then
+    update_ok=0
+  elif ! wait_for_health; then
+    update_ok=0
+  fi
+
+  if [[ "$update_ok" -ne 1 ]]; then
+    echo "Update verification failed; restoring the previous application files." >&2
+    systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+    if ! rsync -a --delete --exclude='/venv/' --exclude='/nrb.log' --exclude='/__pycache__/' "$tmp/backup/" "$APP_DIR/"; then
+      echo "CRITICAL: automatic source rollback failed. Restore $backup_dir/lvm-panel-$stamp.tar.gz manually." >&2
+      rm -rf "$tmp"
+      return 1
+    fi
+    if [[ -f "$tmp/backup/external-db-path.txt" && -f "$tmp/backup/external-database.sqlite3" ]]; then
+      db_path="$(cat "$tmp/backup/external-db-path.txt")"
+      if ! python3 - "$tmp/backup/external-database.sqlite3" "$db_path" <<'PY'
+import sqlite3
+import sys
+source = sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+finally:
+    target.close()
+    source.close()
+PY
+      then
+        echo "CRITICAL: external database rollback failed; restore the DB backup manually." >&2
+        rm -rf "$tmp"
+        return 1
+      fi
+    fi
+    if [[ -x "$APP_DIR/venv/bin/python" && -f "$APP_DIR/requirements.txt" ]]; then
+      "$APP_DIR/venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt" || echo "Warning: dependency rollback needs attention." >&2
+    fi
+    systemctl daemon-reload || true
+    systemctl start "$SERVICE" || true
+    if ! wait_for_health; then
+      echo "CRITICAL: previous files were restored, but the service is still unhealthy. Check logs." >&2
+      journalctl -u "$SERVICE" -n 100 --no-pager || true
+      rm -rf "$tmp"
+      return 1
+    fi
+    rm -rf "$tmp"
+    echo "Previous application restored and health check passed. Rollback archive: $backup_dir/lvm-panel-$stamp.tar.gz"
+    return 1
+  fi
+
+  rm -rf "$tmp"
+  echo "Update complete; health check passed."
+  echo "Rollback archive: $backup_dir/lvm-panel-$stamp.tar.gz"
+  echo "Service: systemctl status $SERVICE"
 }
+
 firewall_panel() {
   if ! command -v ufw >/dev/null 2>&1; then apt-get update && apt-get install -y ufw; fi
-  echo "Opening TCP/${PORT} with UFW. If your VPS provider has a cloud firewall, allow it there too."
+  echo "Adding an inbound rule for TCP/${PORT}. If your VPS provider has a cloud firewall, allow it there too."
   ufw allow "${PORT}/tcp"
+  if ! ufw status | grep -q "Status: active"; then
+    local ssh_port="22"
+    if command -v sshd >/dev/null 2>&1; then
+      ssh_port="$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')"
+      ssh_port="${ssh_port:-22}"
+    fi
+    echo "UFW is currently inactive. Before enabling it, allowing SSH on TCP/${ssh_port}."
+    ufw allow "${ssh_port}/tcp"
+    read -r -p "Enable UFW now? Check your provider firewall and custom SSH port first [y/N]: " enable_ufw
+    case "${enable_ufw,,}" in
+      y|yes) ufw --force enable ;;
+      *) echo "Rules were added, but UFW remains inactive. Enable it manually when remote access is confirmed." ;;
+    esac
+  fi
   ufw status
 }
 system_info() {
@@ -221,19 +424,40 @@ system_info() {
   echo "Port: ${PORT}"
 }
 uninstall_panel() {
-  echo "This removes the panel service and application code. Database/backups will be preserved unless separately deleted."
+  echo "This removes the panel service and application code. A protected archive of the database, uploads, and environment config will be created first."
   read -r -p "Type REMOVE to continue: " answer
   [[ "$answer" == "REMOVE" ]] || { echo "Cancelled."; return; }
+
+  local stamp backup_dir db_path
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  backup_dir="/var/backups/lvm-panel/uninstall-$stamp"
+  mkdir -p "$backup_dir"
+  chmod 700 "$backup_dir"
+
+  if [[ -f /etc/lvm-panel.env ]]; then
+    cp -a /etc/lvm-panel.env "$backup_dir/lvm-panel.env"
+    db_path="$(sed -n 's/^DATABASE_PATH=//p' /etc/lvm-panel.env | head -n1)"
+  else
+    db_path=""
+  fi
+  if [[ -n "$db_path" && "$db_path" != /* ]]; then db_path="$APP_DIR/$db_path"; fi
+  if [[ -n "$db_path" && -f "$db_path" ]]; then cp -a "$db_path" "$backup_dir/database.sqlite3"; fi
+  if [[ -d "$APP_DIR/static/uploads" ]]; then cp -a "$APP_DIR/static/uploads" "$backup_dir/uploads"; fi
+  if [[ -f "$APP_DIR/nrb.db" && "$APP_DIR/nrb.db" != "$db_path" ]]; then cp -a "$APP_DIR/nrb.db" "$backup_dir/nrb.db"; fi
+  if ! tar -czf "$backup_dir.tar.gz" -C "$(dirname "$backup_dir")" "$(basename "$backup_dir")"; then
+    echo "Backup archive failed; refusing to uninstall." >&2
+    return 1
+  fi
+  chmod 600 "$backup_dir.tar.gz"
+  rm -rf "$backup_dir"
+
   systemctl disable --now "$SERVICE" 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE}.service"
   systemctl daemon-reload
-  if [[ -d "$APP_DIR" ]]; then
-    mkdir -p /var/backups/lvm-panel
-    [[ -f "$APP_DIR/nrb.db" ]] && cp -a "$APP_DIR/nrb.db" "/var/backups/lvm-panel/nrb-$(date +%Y%m%d-%H%M%S).db"
-    rm -rf "$APP_DIR"
-  fi
+  rm -rf "$APP_DIR"
   rm -f /etc/lvm-panel.env
   echo "Panel removed. LXD was left installed because it may contain VPS instances."
+  echo "Backup archive: $backup_dir.tar.gz"
 }
 
 menu() {
@@ -262,17 +486,17 @@ BANNER
     echo
     read -r -p "Choose an option [0-11]: " choice || exit 0
     case "$choice" in
-      1) install_panel ;;
-      2) start_panel ;;
-      3) stop_panel ;;
-      4) restart_panel ;;
-      5) status_panel ;;
-      6) logs_panel ;;
-      7) firewall_panel ;;
-      8) update_panel ;;
-      9) repair_panel ;;
-     10) system_info ;;
-     11) uninstall_panel ;;
+      1) install_panel || { rc=$?; echo "Install option failed (exit $rc); menu remains available." >&2; } ;;
+      2) start_panel || { rc=$?; echo "Start option failed (exit $rc); menu remains available." >&2; } ;;
+      3) stop_panel || { rc=$?; echo "Stop option failed (exit $rc); menu remains available." >&2; } ;;
+      4) restart_panel || { rc=$?; echo "Restart option failed (exit $rc); menu remains available." >&2; } ;;
+      5) status_panel || { rc=$?; echo "Status option failed (exit $rc); menu remains available." >&2; } ;;
+      6) logs_panel || { rc=$?; echo "Logs option failed (exit $rc); menu remains available." >&2; } ;;
+      7) firewall_panel || { rc=$?; echo "Firewall option failed (exit $rc); menu remains available." >&2; } ;;
+      8) update_panel || { rc=$?; echo "Update option failed (exit $rc); menu remains available." >&2; } ;;
+      9) repair_panel || { rc=$?; echo "Repair option failed (exit $rc); menu remains available." >&2; } ;;
+     10) system_info || { rc=$?; echo "System-info option failed (exit $rc); menu remains available." >&2; } ;;
+     11) uninstall_panel || { rc=$?; echo "Uninstall option failed (exit $rc); menu remains available." >&2; } ;;
       0) exit 0 ;;
       *) echo "Invalid option. Choose 0-11." ;;
     esac
