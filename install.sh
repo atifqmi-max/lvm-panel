@@ -146,7 +146,7 @@ EOF
     if grep -q '^PORT=' /etc/lvm-panel.env; then
       sed -i "s/^PORT=.*/PORT=${PORT}/" /etc/lvm-panel.env
     else
-      printf '\\nPORT=${PORT}\\n' >> /etc/lvm-panel.env
+      printf '\nPORT=${PORT}\n' >> /etc/lvm-panel.env
     fi
   fi
 
