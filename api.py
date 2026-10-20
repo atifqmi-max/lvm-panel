@@ -417,7 +417,7 @@ def api_create_vps():
     raw_hostname = str(data.get('hostname') or '').strip().lower()
     if len(raw_hostname) > 63:
         return jsonify({'success': False, 'error': 'Hostname must be 63 characters or fewer'}), 400
-    slug = re.sub(r'[^a-z0-9-]+', '-', raw_hostname).strip('-')[:40].strip('-')
+    slug = re.sub(r'[^a-z0-9-]+', '-', raw_hostname).strip('-')[:30].strip('-')
     if raw_hostname and not slug:
         return jsonify({'success': False, 'error': 'Hostname must contain letters or numbers'}), 400
 
