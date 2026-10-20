@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "security/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest pip-audit
+      - name: Check Python syntax
+        run: python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
+      - name: Check installer syntax
+        run: bash -n install.sh
+      - name: Run regression tests
+        run: python -m pytest -q
+      - name: Audit pinned dependencies
+        # PYSEC-2026-2858 has no fix version listed by the advisory database; Paramiko is retained for the existing SSH-console feature.
+        run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-2858

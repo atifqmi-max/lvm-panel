@@ -70,7 +70,9 @@ class LXDRuntime:
             raise RuntimeError(f"LXD instance {name} already exists")
         cls._run_sync(["lxc", "init", cls._image(image), name], timeout=600)
         try:
-            cls._run_sync(["lxc", "config", "set", name, "security.privileged", "true"])
+            # Privileged containers weaken isolation and are opt-in for compatibility cases.
+            if os.getenv('LVM_ALLOW_PRIVILEGED_CONTAINERS', 'false').lower() == 'true':
+                cls._run_sync(["lxc", "config", "set", name, "security.privileged", "true"])
             cls._run_sync(["lxc", "config", "set", name, "security.nesting", "true"])
             if os.path.exists("/dev/net/tun"):
                 try:
@@ -95,7 +97,7 @@ class LXDRuntime:
     @classmethod
     async def update(cls, name, privileged=False, ram_mb=None, cpu=None):
         def work():
-            if privileged:
+            if privileged and os.getenv('LVM_ALLOW_PRIVILEGED_CONTAINERS', 'false').lower() == 'true':
                 cls._run_sync(["lxc", "config", "set", name, "security.privileged", "true"])
                 cls._run_sync(["lxc", "config", "set", name, "security.nesting", "true"])
             if ram_mb:

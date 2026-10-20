@@ -9,6 +9,17 @@ PORT="${PORT:-5000}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/nrb.py" ]]; then cd "$SCRIPT_DIR"; fi
 
+# `curl | sudo bash` uses stdin for the download, so attach interactive menu reads to the TTY.
+# Automation can use `bash install.sh --install` and does not need a terminal.
+if [[ "${1:-}" != "--install" && ! -t 0 ]]; then
+  if [[ -r /dev/tty ]]; then
+    exec </dev/tty
+  else
+    echo "Interactive menu requires a terminal. Use bash install.sh --install for unattended installation."
+    exit 2
+  fi
+fi
+
 trap 'rc=$?; echo; echo "[ERROR] Command failed (exit $rc) at line ${LINENO}. Review the message above."; exit "$rc"' ERR
 
 need_root() {
@@ -80,7 +91,7 @@ install_panel() {
   python3 -m venv venv
   venv/bin/python -m pip install --upgrade pip
   venv/bin/python -m pip install -r requirements.txt
-  python3 -m py_compile nrb.py api.py node.py lxd_backend.py
+  python3 -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
   chmod +x start.sh nrb-tool.sh install.sh
 
   if [[ ! -f /etc/lvm-panel.env ]]; then
@@ -99,6 +110,9 @@ MAIN_ADMIN_USERNAME=admin
 MAIN_ADMIN_PASSWORD=${adminpass}
 MAIN_ADMIN_EMAIL=admin@localhost
 DEBUG_MODE=False
+TRUST_PROXY_HEADERS=False
+LVM_ALLOW_PRIVILEGED_CONTAINERS=False
+SESSION_COOKIE_SECURE=False
 EOF
     chmod 600 /etc/lvm-panel.env
     printf '%s\n' "Initial admin credentials (save them now):" "Username: admin" "Password: $adminpass" | tee /root/lvm-panel-credentials.txt
@@ -130,6 +144,8 @@ EOF
   echo "Installation complete."
   echo "Panel: http://YOUR_SERVER_IP:${PORT}"
   echo "Credentials saved in: /root/lvm-panel-credentials.txt"
+  echo "Security: use HTTPS behind a trusted reverse proxy before exposing login traffic publicly."
+  echo "Node agent defaults to localhost; configure NODE_BIND_HOST and firewall rules for remote nodes."
   echo "Service: systemctl status ${SERVICE}"
 }
 
@@ -171,13 +187,22 @@ update_panel() {
     cp -a "$top/." "$tmp/source/"
   fi
   [[ -f "$tmp/source/nrb.py" ]] || { echo "Could not download project source."; return 1; }
+  # Preserve user uploads before replacing static assets from the new release.
+  if [[ -d "$APP_DIR/static/uploads" ]]; then
+    mkdir -p "$tmp/preserved-uploads"
+    cp -a "$APP_DIR/static/uploads/." "$tmp/preserved-uploads/"
+  fi
   systemctl stop "$SERVICE" || true
-  for f in nrb.py api.py node.py lxd_backend.py templates static requirements.txt start.sh nrb-tool.sh README.md README_NRB.md; do
+  for f in nrb.py api.py node.py lxd_backend.py security_utils.py templates static requirements.txt start.sh nrb-tool.sh README.md README_NRB.md; do
     [[ -e "$tmp/source/$f" ]] && { rm -rf "$APP_DIR/$f"; cp -a "$tmp/source/$f" "$APP_DIR/$f"; }
   done
+  if [[ -d "$tmp/preserved-uploads" ]]; then
+    mkdir -p "$APP_DIR/static/uploads"
+    cp -a "$tmp/preserved-uploads/." "$APP_DIR/static/uploads/"
+  fi
   cd "$APP_DIR"
   venv/bin/python -m pip install -r requirements.txt
-  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py
+  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
   systemctl restart "$SERVICE"
   echo "Update complete."
 }

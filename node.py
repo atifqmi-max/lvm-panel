@@ -12,6 +12,7 @@ from lxd_backend import LXDRuntime
 app = Flask(__name__)
 API_KEY = os.getenv('NRB_NODE_API_KEY', '')
 PORT = int(os.getenv('PORT', '9000'))
+BIND_HOST = os.getenv('NODE_BIND_HOST', '127.0.0.1')
 STARTED_AT = time.time()
 
 
@@ -140,4 +141,4 @@ def container_action(action):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT)
+    app.run(host=BIND_HOST, port=PORT)
