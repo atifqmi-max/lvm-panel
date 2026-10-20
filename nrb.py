@@ -34,6 +34,7 @@ from functools import wraps
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlencode, parse_qs
+from security_utils import is_safe_redirect_target, is_same_origin_request
 
 # Web framework imports
 import flask
@@ -163,6 +164,29 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'warning'
+
+# Same-origin validation is a lightweight CSRF defense for cookie-authenticated mutations.
+# API clients without a browser session may omit Origin/Referer; browser requests may not.
+@app.before_request
+def enforce_same_origin_for_mutations():
+    if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        return None
+    session_cookie = app.config.get('SESSION_COOKIE_NAME', 'session')
+    has_session_cookie = session_cookie in request.cookies
+    if is_same_origin_request(
+        origin=request.headers.get('Origin'),
+        referer=request.headers.get('Referer'),
+        expected_origin=request.host_url,
+        sec_fetch_site=request.headers.get('Sec-Fetch-Site'),
+        has_session_cookie=has_session_cookie,
+    ):
+        return None
+    logger.warning('Rejected cross-origin mutation: method=%s path=%s ip=%s',
+                   request.method, request.path, request.remote_addr)
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify(success=False, error='Cross-origin request rejected'), 403
+    abort(403)
+
 
 # Active console sessions tracking
 active_consoles = {}
@@ -2784,10 +2808,7 @@ def login():
             flash(f'Welcome back, {user.username}!', 'success')
             
             next_page = request.args.get('next', '')
-            parsed_next = urlparse(next_page)
-            if next_page.startswith('/') and not next_page.startswith('//') and not parsed_next.netloc and not parsed_next.scheme and chr(92) not in next_page:
-                return redirect(next_page)
-            return redirect(url_for('dashboard'))
+            return redirect(next_page) if is_safe_redirect_target(next_page) else redirect(url_for('dashboard'))
         else:
             flash('Invalid username/email or password', 'danger')
             log_activity(None, 'login_failed', 'auth', None, {'username_or_email': username_or_email, 'ip': request.remote_addr})
