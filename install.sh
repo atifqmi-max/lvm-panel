@@ -47,25 +47,38 @@ bootstrap_source() {
     echo "$PWD"
     return
   fi
-  local tmp
+  local tmp archive_url
   tmp="$(mktemp -d)"
-  echo "Downloading LVM Panel source from ${REPO} (${BRANCH})..." >&2
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 --branch "$BRANCH" "$REPO" "$tmp/source" >/dev/null 2>&1 || true
+  archive_url="https://codeload.github.com/atifqmi-max/lvm-panel/zip/refs/heads/${BRANCH}"
+  echo "[1/3] Preparing temporary download directory..." >&2
+  mkdir -p "$tmp/source" "$tmp/unpacked"
+  echo "[2/3] Downloading LVM Panel source from GitHub (this may take a minute)..." >&2
+  if ! curl -fL --retry 2 --connect-timeout 15 --max-time 180 --progress-bar "$archive_url" -o "$tmp/source.zip"; then
+    echo "ERROR: GitHub source download failed or timed out." >&2
+    echo "Check VPS DNS/network access to codeload.github.com and try again." >&2
+    rm -rf "$tmp"
+    return 1
   fi
-  if [[ ! -f "$tmp/source/nrb.py" ]]; then
-    rm -rf "$tmp/source"
-    mkdir -p "$tmp/source"
-    apt-get update -qq >&2
-    apt-get install -y -qq ca-certificates curl unzip >&2
-    curl -fL --retry 3 "https://codeload.github.com/atifqmi-max/lvm-panel/zip/refs/heads/${BRANCH}" -o "$tmp/source.zip"
-    unzip -q "$tmp/source.zip" -d "$tmp/unpacked"
-    local top
-    top="$(find "$tmp/unpacked" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-    [[ -n "$top" && -f "$top/nrb.py" ]] || { echo "Could not find nrb.py in the downloaded repository."; exit 1; }
-    cp -a "$top/." "$tmp/source/"
+  echo "[3/3] Extracting and validating source..." >&2
+  if ! python3 - "$tmp/source.zip" "$tmp/unpacked" <<'PY'
+import sys
+import zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    archive.extractall(sys.argv[2])
+PY
+  then
+    echo "ERROR: The downloaded source archive is invalid or Python zip support failed." >&2
+    rm -rf "$tmp"
+    return 1
   fi
-  [[ -f "$tmp/source/nrb.py" ]] || { echo "Repository download did not contain nrb.py."; exit 1; }
+  local top
+  top="$(find "$tmp/unpacked" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+  if [[ -z "$top" || ! -f "$top/nrb.py" || ! -f "$top/lxd_backend.py" ]]; then
+    echo "ERROR: Downloaded repository is missing required application files." >&2
+    rm -rf "$tmp"
+    return 1
+  fi
+  cp -a "$top/." "$tmp/source/"
   echo "$tmp/source"
 }
 
