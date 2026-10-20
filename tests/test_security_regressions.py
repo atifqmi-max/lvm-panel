@@ -51,6 +51,8 @@ def test_api_vps_creation_uses_real_backend_instead_of_success_stub():
 def test_installer_has_health_check_and_transactional_update_rollback():
     source = (ROOT / "install.sh").read_text(encoding="utf-8")
     assert "wait_for_health" in source
+    assert 'SCRIPT_PATH="${BASH_SOURCE[0]:-}"' in source
+    assert 'else\n  SCRIPT_DIR="$PWD"' in source
     assert "/api/v1/health" in source
     assert "restoring the previous application files" in source
     assert "Rollback archive:" in source
