@@ -164,7 +164,7 @@ repair_panel() {
   cd "$APP_DIR"
   python3 -m venv venv
   venv/bin/python -m pip install -r requirements.txt
-  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py security_utils.py
+  venv/bin/python -m py_compile nrb.py api.py node.py lxd_backend.py
   systemctl daemon-reload
   systemctl restart "$SERVICE" || true
   echo "Repair checks completed. See Logs if service is not active."
